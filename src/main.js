@@ -2,8 +2,8 @@ import { branches } from "./branches/index.js";
 import { renderMathMl } from "./core/mathml.js?v=rational-frac-fix-20260629";
 import { autoFixEquationInput, getEquationDiagnostics, smartCleanMathInput } from "./core/normalizer.js?v=rational-frac-fix-20260629";
 import { createDefaultState, loadState, normalizeColumnSizes, saveState } from "./core/store.js?v=full-paste-fix-20260629";
-import { createImagePdfBlob } from "./core/imagePdf.js?v=image-pdf-upgrades-20260705";
-import { renderApp } from "./ui/layout.js?v=image-pdf-upgrades-20260705";
+import { createImagePdfBlob } from "./core/imagePdf.js?v=clean-topbar-20260705";
+import { renderApp } from "./ui/layout.js?v=clean-topbar-20260705";
 
 const app = document.getElementById("app");
 const HISTORY_LIMIT = 80;
