@@ -23,6 +23,7 @@ export function createDefaultState() {
     cropMode: false,
     activeChapterId: "",
     activeDrawTool: "",
+    imageToolMode: "image-to-pdf",
     manualLabel: "A",
     labelPosition: "top",
     manualAlignment: "center",

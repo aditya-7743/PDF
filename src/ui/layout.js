@@ -1,6 +1,6 @@
 import { branches } from "../branches/index.js";
-import { renderMathMl } from "../core/mathml.js?v=rational-frac-fix-20260629";
-import { getEquationDiagnostics } from "../core/normalizer.js?v=rational-frac-fix-20260629";
+import { renderMathMl } from "../core/mathml.js?v=gemini-paste-clean-20260705";
+import { getEquationDiagnostics } from "../core/normalizer.js?v=gemini-paste-clean-20260705";
 
 export function renderApp(state) {
   const rendered = renderMathMl(state.input);
@@ -11,7 +11,7 @@ export function renderApp(state) {
       ${renderTopbar(state)}
       ${renderWorkbench(state, rendered, diagnostics)}
       <footer class="statusbar">
-        ${mode === "image-tools" ? "" : "<span>Paste input and edit visible output directly</span><span>Website only | Branch-based files | Local autosave</span>"}
+        ${mode === "equation" || mode === "math-figures" || mode === "image-tools" ? "" : "<span>Paste input and edit visible output directly</span><span>Website only | Branch-based files | Local autosave</span>"}
       </footer>
     </div>
   `;
@@ -33,42 +33,93 @@ function renderTopbar(state) {
 function renderWorkbench(state, rendered, diagnostics) {
   const mode = normalizeAppMode(state.mode);
   if (mode === "image-tools") {
-    return renderImageToolsWorkbench();
+    return renderImageToolsWorkbench(state);
   }
 
   if (isDrawingMode(mode)) {
     return `
-      <main class="workbench is-figures-mode" style="${renderColumnStyle(state.columns)}">
-        ${renderToolsPanel(state, mode)}
-        <div class="column-resizer" data-column-resizer="tools-preview" role="separator" aria-label="Resize tools and canvas columns"></div>
-        ${renderPreviewPanel(state, rendered, diagnostics)}
-      </main>
+      <main class="workbench is-figures-mode is-empty-figures-mode" aria-label="Math Figures"></main>
     `;
   }
 
   return `
-    <main class="workbench is-equation-mode" style="${renderColumnStyle(state.columns)}">
-      ${renderEditorPanel(state, rendered, diagnostics)}
-      <div class="column-resizer" data-column-resizer="editor-preview" role="separator" aria-label="Resize paste input and canvas columns"></div>
-      ${renderPreviewPanel(state, rendered, diagnostics)}
+    ${renderEquationEditorWorkbench(state, rendered, diagnostics)}
+  `;
+}
+
+function renderEquationEditorWorkbench(state, rendered, diagnostics) {
+  const alignment = normalizePreviewAlignment(state.alignment);
+  const canvasAlign = previewAlignmentToCanvas(alignment);
+  const textAlign = previewAlignmentToText(alignment);
+  const pageMargin = clampNumber(state.pageMargin, 8, 96, 32);
+  const pageZoom = clampNumber(state.pageZoom, 40, 220, 100) / 100;
+  const previewHtml = state.visualOverride || rendered.mathMl;
+
+  return `
+    <main class="workbench is-equation-mode is-equation-editor-mode" aria-label="Equation Editor">
+      <section class="panel equation-paste-panel">
+        <div class="panel-header equation-panel-header">
+          <div>
+            <div class="panel-title">Paste Equation</div>
+            <div class="hint">Gemini / ChatGPT LaTeX</div>
+          </div>
+          <span class="badge">${rendered.normalized.length} chars</span>
+        </div>
+        ${renderEquationStatus(diagnostics)}
+        <textarea class="equation-input equation-latex-input" data-bind="input" spellcheck="false" placeholder="${branches.editor.placeholder}">${escapeHtml(state.input)}</textarea>
+        <div class="equation-paste-actions">
+          <button class="equation-action-button" data-action="smart-clean" type="button">Clean</button>
+          <button class="equation-action-button${diagnostics?.canFix ? "" : " is-disabled"}" data-action="fix-brackets" type="button"${diagnostics?.canFix ? "" : " disabled"}>Fix</button>
+          <button class="equation-action-button" data-action="copy-latex" type="button">Copy LaTeX</button>
+        </div>
+      </section>
+
+      <section class="panel equation-preview-panel">
+        <div class="panel-header equation-panel-header">
+          <div>
+            <div class="panel-title">Rendered Equation</div>
+            <div class="hint">Editable preview</div>
+          </div>
+          <div class="equation-preview-actions">
+            <button class="equation-action-button" data-action="copy-png" type="button">Copy PNG</button>
+            <button class="equation-action-button primary" data-action="download-png" type="button">Download PNG</button>
+          </div>
+        </div>
+        <div class="equation-preview-stage" data-equation-zoom-surface>
+          <div class="equation-canvas equation-output-canvas is-editable page-auto" data-equation-edit-canvas data-preview-alignment="${alignment}" style="background:${escapeHtml(state.background)}; --preview-align:${canvasAlign}; --page-margin:${pageMargin}px; --page-zoom:${pageZoom};">
+            <div class="equation-render" contenteditable="true" spellcheck="false" data-visual-edit="true" data-base-font-size="${state.fontSize}" style="font-size:${state.fontSize}px; font-family:${escapeHtml(state.fontFamily)}; color:${escapeHtml(state.textColor)}; line-height:${state.lineHeight}; text-align:${textAlign};">
+              ${previewHtml}
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   `;
 }
 
-function renderImageToolsWorkbench() {
+function renderImageToolsWorkbench(state) {
+  const imageTool = normalizeImageToolMode(state.imageToolMode);
   return `
     <main class="workbench is-image-tools-mode" aria-label="Image Tools">
       <aside class="panel image-tool-picker">
         <div class="panel-header">
           <div>
-            <div class="panel-title">Image to PDF</div>
+            <div class="panel-title">Image Tools</div>
           </div>
         </div>
         <div class="panel-body image-tool-picker-body">
-          <button class="image-tool-button is-active" data-action="select-image-tool" data-image-tool="image-to-pdf" type="button">Image to PDF</button>
+          <button class="image-tool-button${imageTool === "image-to-pdf" ? " is-active" : ""}" data-action="select-image-tool" data-image-tool="image-to-pdf" type="button">Image to PDF</button>
+          <button class="image-tool-button${imageTool === "image-resize" ? " is-active" : ""}" data-action="select-image-tool" data-image-tool="image-resize" type="button">Image resize</button>
         </div>
       </aside>
 
+      ${imageTool === "image-resize" ? renderImageResizePanel() : renderImagePdfPanel()}
+    </main>
+  `;
+}
+
+function renderImagePdfPanel() {
+  return `
       <section class="panel image-pdf-panel" data-image-pdf-tool tabindex="0">
         <div class="panel-header image-pdf-header">
           <div>
@@ -171,14 +222,189 @@ function renderImageToolsWorkbench() {
               <input data-image-pdf-option="filename" type="text" value="image-to-pdf" spellcheck="false" />
             </label>
 
-            <div class="image-pdf-summary">
-              <span data-image-pdf-status>Ready</span>
+            <div class="image-pdf-split-controls">
+              <label class="image-pdf-field image-pdf-split-size">
+                <span>Pages per PDF</span>
+                <input data-image-pdf-option="splitSize" type="number" min="1" step="1" inputmode="numeric" placeholder="All" />
+              </label>
+              <button class="image-pdf-split-download-all" data-image-pdf-split-download-all type="button" disabled>Download All</button>
+            </div>
+
+            <div class="image-pdf-name-range-row">
+              <label class="image-pdf-field image-pdf-part-pattern">
+                <span>Part Name</span>
+                <input data-image-pdf-option="partNamePattern" type="text" value="{name} part {n}" spellcheck="false" />
+              </label>
+
+              <label class="image-pdf-field image-pdf-range-field">
+                <span>Ranges</span>
+                <input data-image-pdf-option="rangeText" type="text" placeholder="1-5, 6-12" spellcheck="false" />
+              </label>
+            </div>
+
+            <div class="image-pdf-split-estimate" data-image-pdf-split-estimate hidden></div>
+
+            <div class="image-pdf-part-list" data-image-pdf-split-list hidden></div>
+
+            <div class="image-pdf-preview" data-image-pdf-preview hidden></div>
+
+            <div class="image-pdf-summary" hidden>
+              <div class="image-pdf-status-row">
+                <span data-image-pdf-status></span>
+                <button class="image-pdf-cancel-button" data-image-pdf-cancel type="button" hidden>Cancel</button>
+              </div>
+              <div class="image-pdf-progress" data-image-pdf-progress hidden>
+                <span data-image-pdf-progress-bar></span>
+              </div>
             </div>
           </aside>
         </div>
       </section>
-    </main>
   `;
+}
+
+function renderImageResizePanel() {
+  return `
+      <section class="panel image-resize-panel" data-image-resize-tool tabindex="0">
+        <div class="panel-header image-resize-header">
+          <div>
+            <div class="panel-title">Image resize</div>
+            <div class="hint">PX, CM, M</div>
+          </div>
+          <div class="image-resize-actions">
+            <button class="image-pdf-secondary" data-image-resize-clear type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="image-resize-workspace">
+          <section class="image-resize-main">
+            <div class="image-pdf-dropzone image-resize-dropzone" data-image-resize-dropzone tabindex="0">
+              <input class="is-hidden" data-image-resize-file type="file" accept="image/*" multiple />
+              <div class="image-pdf-drop-copy">
+                <span class="image-pdf-drop-title">Add Images</span>
+              </div>
+              <div class="image-pdf-drop-actions">
+                <button class="image-pdf-drop-button" data-image-resize-add type="button">Browse</button>
+              </div>
+            </div>
+
+            <div class="image-resize-canvas-shell">
+              <div class="image-resize-canvas-head">
+                <strong data-image-resize-selected-name>No image selected</strong>
+                <span data-image-resize-selected-meta></span>
+              </div>
+              <div class="image-resize-canvas-stage">
+                <canvas class="image-resize-canvas" data-image-resize-canvas></canvas>
+                <div class="image-resize-canvas-empty" data-image-resize-canvas-empty>No image selected</div>
+              </div>
+            </div>
+
+            <div class="image-resize-queue-head">
+              <span data-image-resize-count>0 images</span>
+              <div class="image-resize-queue-actions">
+                <button class="image-pdf-remove-all-button" data-image-resize-clear type="button">Remove All</button>
+                <button class="image-pdf-add-inline" data-image-resize-add type="button">Add More</button>
+              </div>
+            </div>
+            <div class="image-resize-list" data-image-resize-list></div>
+          </section>
+
+          <aside class="image-pdf-options image-resize-options">
+            <div class="image-pdf-option-grid image-resize-option-grid">
+              <label class="image-pdf-field">
+                <span>Unit</span>
+                <select data-image-resize-option="unit">
+                  <option value="px">Pixels</option>
+                  <option value="cm">CM</option>
+                  <option value="m">Meter</option>
+                </select>
+              </label>
+              <label class="image-pdf-field">
+                <span>DPI</span>
+                <input data-image-resize-option="dpi" type="number" min="1" max="1200" step="1" value="300" />
+              </label>
+              <label class="image-pdf-field">
+                <span>Width</span>
+                <input data-image-resize-option="width" type="number" min="0" step="0.01" placeholder="Auto" />
+              </label>
+              <label class="image-pdf-field">
+                <span>Height</span>
+                <input data-image-resize-option="height" type="number" min="0" step="0.01" placeholder="Auto" />
+              </label>
+            </div>
+
+            <label class="image-resize-check">
+              <input data-image-resize-option="lockRatio" type="checkbox" checked />
+              <span>Lock ratio</span>
+            </label>
+
+            <div class="image-resize-live-box" data-image-resize-live>
+              <div>
+                <span>Original</span>
+                <strong data-image-resize-live-original>-</strong>
+              </div>
+              <div>
+                <span>Output</span>
+                <strong data-image-resize-live-output>-</strong>
+              </div>
+              <div>
+                <span>Approx size</span>
+                <strong data-image-resize-live-size>-</strong>
+              </div>
+            </div>
+
+            <div class="image-resize-scale-row">
+              <label class="image-pdf-field">
+                <span>Percent <b data-image-resize-scale-value>100%</b></span>
+                <input data-image-resize-option="scale" type="number" min="1" max="500" step="1" value="100" />
+              </label>
+              <label class="image-pdf-field image-resize-slider-field">
+                <span>Slider</span>
+                <input data-image-resize-option="scaleSlider" type="range" min="1" max="500" step="1" value="100" />
+              </label>
+            </div>
+
+            <div class="image-resize-target-row">
+              <label class="image-pdf-field">
+                <span>Size</span>
+                <input data-image-resize-option="targetSize" type="number" min="0" step="1" placeholder="Any" />
+              </label>
+              <label class="image-pdf-field">
+                <span>Unit</span>
+                <select data-image-resize-option="targetUnit">
+                  <option value="kb">KB</option>
+                  <option value="mb">MB</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="image-pdf-field image-resize-quality-field">
+              <span>Quality <b data-image-resize-quality-value>92%</b></span>
+              <input data-image-resize-option="quality" type="range" min="20" max="100" step="1" value="92" />
+            </label>
+
+            <label class="image-pdf-field">
+              <span>Name suffix</span>
+              <input data-image-resize-option="suffix" type="text" value="resized" spellcheck="false" />
+            </label>
+
+            <div class="image-resize-format-grid">
+              <button class="image-resize-format-button" data-image-resize-download="jpg" type="button">JPG</button>
+              <button class="image-resize-format-button" data-image-resize-download="png" type="button">PNG</button>
+              <button class="image-resize-format-button" data-image-resize-download="webp" type="button">WebP</button>
+            </div>
+
+            <div class="image-resize-summary" hidden>
+              <span data-image-resize-status></span>
+            </div>
+          </aside>
+        </div>
+      </section>
+  `;
+}
+
+function normalizeImageToolMode(value) {
+  return value === "image-resize" ? "image-resize" : "image-to-pdf";
 }
 
 function normalizeAppMode(value) {

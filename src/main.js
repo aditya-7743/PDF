@@ -1,12 +1,13 @@
 import { branches } from "./branches/index.js";
-import { renderMathMl } from "./core/mathml.js?v=rational-frac-fix-20260629";
-import { autoFixEquationInput, getEquationDiagnostics, smartCleanMathInput } from "./core/normalizer.js?v=rational-frac-fix-20260629";
+import { renderMathMl } from "./core/mathml.js?v=gemini-paste-clean-20260705";
+import { autoFixEquationInput, getEquationDiagnostics, smartCleanMathInput } from "./core/normalizer.js?v=gemini-paste-clean-20260705";
 import { createDefaultState, loadState, normalizeColumnSizes, saveState } from "./core/store.js?v=full-paste-fix-20260629";
 import { createImagePdfBlob } from "./core/imagePdf.js?v=clean-topbar-20260705";
-import { renderApp } from "./ui/layout.js?v=clean-topbar-20260705";
+import { renderApp } from "./ui/layout.js?v=image-select-fix-20260706";
 
 const app = document.getElementById("app");
 const HISTORY_LIMIT = 80;
+const PNG_EXPORT_QUALITY_SCALE = 3;
 const IMAGE_PDF_VIEW_MODES = ["extra-large", "large", "medium", "small", "list", "details", "tiles", "content"];
 const IMAGE_PDF_DRAG_TYPE = "application/x-image-pdf-item-id";
 const IMAGE_PDF_COMPRESSION_PRESETS = {
@@ -14,6 +15,12 @@ const IMAGE_PDF_COMPRESSION_PRESETS = {
   balanced: { quality: 92, label: "Balanced" },
   small: { quality: 72, label: "Small size" },
 };
+const IMAGE_PDF_SETTINGS_KEY = "math-original-form-builder:image-pdf-settings:v1";
+const DEFAULT_IMAGE_PDF_PART_NAME_PATTERN = "{name} part {n}";
+const IMAGE_PDF_CANCELLED_MESSAGE = "Operation cancelled.";
+const IMAGE_RESIZE_SETTINGS_KEY = "math-original-form-builder:image-resize-settings:v1";
+const IMAGE_RESIZE_MAX_DIMENSION = 12000;
+const IMAGE_RESIZE_MAX_PIXELS = 100000000;
 let state = loadState();
 let resizeSession = null;
 let drawSession = null;
@@ -23,13 +30,20 @@ let redoStack = [];
 let imagePdfItems = [];
 let imagePdfViewMode = "large";
 let imagePdfDraggingId = "";
+let imagePdfPreviewUrl = "";
+let imagePdfCancelRequested = false;
+let imageResizeItems = [];
+let imageResizeSelectedId = "";
+let imageResizePreviewDrawToken = 0;
 
 document.addEventListener("paste", handleImagePdfPaste);
+document.addEventListener("keydown", handleImagePdfLightboxKeydown);
 
 render();
 
 function render() {
   state.mode = normalizeAppMode(state.mode);
+  state.imageToolMode = normalizeImageToolMode(state.imageToolMode);
   if (state.mode === "math-figures") {
     state.visualOverride = renderDrawingSurface();
   } else if (String(state.visualOverride || "").includes("drawing-workspace")) {
@@ -44,6 +58,10 @@ function render() {
 function normalizeAppMode(value) {
   if (value === "math-figures" || value === "image-tools") return value;
   return "equation";
+}
+
+function normalizeImageToolMode(value) {
+  return value === "image-resize" ? "image-resize" : "image-to-pdf";
 }
 
 function isDrawingMode(value) {
@@ -71,6 +89,15 @@ function bindEvents() {
   app.querySelectorAll("[data-visual-edit]").forEach((node) => {
     node.addEventListener("input", handleVisualEdit);
     node.addEventListener("blur", handleVisualEdit);
+    node.addEventListener("copy", handleCanvasCopy);
+    node.addEventListener("cut", handleCanvasCut);
+    node.addEventListener("paste", handleCanvasPaste);
+  });
+  app.querySelectorAll("[data-equation-edit-canvas]").forEach((node) => {
+    node.addEventListener("click", handleEquationCanvasClick);
+  });
+  app.querySelectorAll("[data-equation-zoom-surface]").forEach((node) => {
+    node.addEventListener("wheel", handleEquationCanvasWheel, { passive: false });
   });
   app.querySelectorAll("[data-editor-command]").forEach((node) => {
     node.addEventListener("mousedown", handleEditorCommand);
@@ -112,6 +139,7 @@ function bindEvents() {
     node.addEventListener("toggle", handleToolGroupToggle);
   });
   bindImagePdfEvents();
+  bindImageResizeEvents();
 }
 
 function bindImagePdfEvents() {
@@ -127,7 +155,13 @@ function bindImagePdfEvents() {
   const shuffleButton = root.querySelector("[data-image-pdf-shuffle]");
   const viewSelect = root.querySelector("[data-image-pdf-view]");
   const queue = root.querySelector("[data-image-pdf-list]");
+  const splitList = root.querySelector("[data-image-pdf-split-list]");
+  const splitDownloadAllButton = root.querySelector("[data-image-pdf-split-download-all]");
+  const previewPanel = root.querySelector("[data-image-pdf-preview]");
+  const cancelButton = root.querySelector("[data-image-pdf-cancel]");
   let dragDepth = 0;
+
+  applySavedImagePdfSettings(root);
 
   if (viewSelect) {
     viewSelect.value = imagePdfViewMode;
@@ -142,6 +176,17 @@ function bindImagePdfEvents() {
   addButtons.forEach((button) => button.addEventListener("click", () => {
     fileInput?.click();
   }));
+
+  dropzone?.addEventListener("click", (event) => {
+    if (event.target.closest("button, input")) return;
+    fileInput?.click();
+  });
+
+  dropzone?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    fileInput?.click();
+  });
 
   pasteButtons.forEach((button) => button.addEventListener("click", pasteImagePdfFromClipboard));
 
@@ -190,6 +235,12 @@ function bindImagePdfEvents() {
     node.addEventListener("change", handleImagePdfOptionInput);
   });
 
+  splitList?.addEventListener("click", handleImagePdfPartDownload);
+  splitList?.addEventListener("click", handleImagePdfPartPreview);
+  splitDownloadAllButton?.addEventListener("click", exportAllImagePdfParts);
+  previewPanel?.addEventListener("click", handleImagePdfPreviewAction);
+  cancelButton?.addEventListener("click", cancelImagePdfJob);
+
   if (queue) {
     queue.addEventListener("click", handleImagePdfListAction);
     queue.addEventListener("dragstart", handleImagePdfQueueDragStart);
@@ -202,11 +253,103 @@ function bindImagePdfEvents() {
   updateImagePdfQualityLabel();
 }
 
+function bindImageResizeEvents() {
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!root) return;
+
+  const fileInput = root.querySelector("[data-image-resize-file]");
+  const dropzone = root.querySelector("[data-image-resize-dropzone]");
+  const addButtons = root.querySelectorAll("[data-image-resize-add]");
+  const clearButtons = root.querySelectorAll("[data-image-resize-clear]");
+  const list = root.querySelector("[data-image-resize-list]");
+  let dragDepth = 0;
+
+  applySavedImageResizeSettings(root);
+
+  fileInput?.addEventListener("change", (event) => {
+    addImageResizeFiles(event.currentTarget.files);
+    event.currentTarget.value = "";
+  });
+
+  addButtons.forEach((button) => button.addEventListener("click", () => {
+    fileInput?.click();
+  }));
+
+  dropzone?.addEventListener("click", (event) => {
+    if (event.target.closest("button, input")) return;
+    fileInput?.click();
+  });
+
+  dropzone?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    fileInput?.click();
+  });
+
+  clearButtons.forEach((button) => button.addEventListener("click", clearImageResizeItems));
+
+  root.addEventListener("dragenter", (event) => {
+    if (!hasImagePdfDraggedFiles(event)) return;
+
+    event.preventDefault();
+    dragDepth += 1;
+    setImageResizeDropActive(root, dropzone, true);
+  });
+
+  root.addEventListener("dragover", (event) => {
+    if (!hasImagePdfDraggedFiles(event)) return;
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    setImageResizeDropActive(root, dropzone, true);
+  });
+
+  root.addEventListener("dragleave", (event) => {
+    if (!hasImagePdfDraggedFiles(event)) return;
+
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
+      setImageResizeDropActive(root, dropzone, false);
+    }
+  });
+
+  root.addEventListener("drop", (event) => {
+    if (!hasImagePdfDraggedFiles(event)) return;
+
+    event.preventDefault();
+    dragDepth = 0;
+    setImageResizeDropActive(root, dropzone, false);
+    addImageResizeFiles(event.dataTransfer?.files);
+  });
+
+  root.querySelectorAll("[data-image-resize-option]").forEach((node) => {
+    node.addEventListener("input", handleImageResizeOptionInput);
+    node.addEventListener("change", handleImageResizeOptionInput);
+  });
+
+  root.querySelectorAll("[data-image-resize-download]").forEach((button) => {
+    button.addEventListener("click", () => downloadImageResizeFormat(button.dataset.imageResizeDownload));
+  });
+
+  list?.addEventListener("click", handleImageResizeListAction);
+
+  syncImageResizeLabels();
+  renderImageResizeQueue();
+  updateImageResizeWorkspace();
+}
+
 function hasImagePdfDraggedFiles(event) {
   return Array.from(event.dataTransfer?.types || []).includes("Files");
 }
 
 function setImagePdfDropActive(root, dropzone, isActive) {
+  root.classList.toggle("is-dragging", isActive);
+  dropzone?.classList.toggle("is-dragging", isActive);
+}
+
+function setImageResizeDropActive(root, dropzone, isActive) {
   root.classList.toggle("is-dragging", isActive);
   dropzone?.classList.toggle("is-dragging", isActive);
 }
@@ -275,6 +418,7 @@ async function addImagePdfFiles(fileList) {
   let addedCount = 0;
   let duplicateCount = 0;
   let failedCount = 0;
+  let firstAddedId = "";
 
   for (const file of files) {
     const signature = await createImagePdfFileSignature(file);
@@ -371,7 +515,13 @@ function normalizeImagePdfRotation(value) {
 
 function handleImagePdfListAction(event) {
   const button = event.target.closest("[data-image-pdf-item-action]");
-  if (!button) return;
+  if (!button) {
+    const item = event.target.closest("[data-image-pdf-item]");
+    if (item && event.target.closest(".image-pdf-thumb-frame")) {
+      openImagePdfLightbox(item.dataset.imagePdfItemId);
+    }
+    return;
+  }
 
   const id = button.dataset.imagePdfItemId;
   const action = button.dataset.imagePdfItemAction;
@@ -379,6 +529,7 @@ function handleImagePdfListAction(event) {
   if (index < 0) return;
 
   if (action === "remove") {
+    closeImagePdfLightbox();
     URL.revokeObjectURL(imagePdfItems[index].url);
     imagePdfItems.splice(index, 1);
   }
@@ -401,6 +552,63 @@ function handleImagePdfListAction(event) {
 
   renderImagePdfQueue();
   setImagePdfStatus(`${imagePdfItems.length} image${imagePdfItems.length === 1 ? "" : "s"} ready.`);
+}
+
+function openImagePdfLightbox(id) {
+  const item = imagePdfItems.find((entry) => entry.id === id);
+  if (!item) return;
+
+  closeImagePdfLightbox();
+  const rotation = normalizeImagePdfRotation(item.rotation || 0);
+  const overlay = document.createElement("div");
+  overlay.className = "image-pdf-lightbox";
+  overlay.dataset.imagePdfLightbox = "";
+  overlay.innerHTML = `
+    <div class="image-pdf-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Image preview">
+      <div class="image-pdf-lightbox-head">
+        <div class="image-pdf-lightbox-title">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>Original image | ${item.width || "-"} x ${item.height || "-"} px | ${formatBytes(item.size)}</span>
+        </div>
+        <div class="image-pdf-lightbox-actions" role="group" aria-label="Image preview controls">
+          <button class="image-pdf-lightbox-zoom is-active" data-image-pdf-lightbox-fit type="button">Fit</button>
+          <button class="image-pdf-lightbox-zoom" data-image-pdf-lightbox-actual type="button">100%</button>
+          <button class="image-pdf-lightbox-close" data-image-pdf-lightbox-close type="button">Close</button>
+        </div>
+      </div>
+      <div class="image-pdf-lightbox-stage">
+        <img class="image-pdf-lightbox-image" src="${escapeHtml(item.url)}" alt="${escapeHtml(item.name)}" style="--image-pdf-rotation: ${rotation}deg" />
+      </div>
+    </div>
+  `;
+  overlay.addEventListener("click", (event) => {
+    const actualButton = event.target.closest("[data-image-pdf-lightbox-actual]");
+    const fitButton = event.target.closest("[data-image-pdf-lightbox-fit]");
+    if (actualButton || fitButton) {
+      const showActualSize = Boolean(actualButton);
+      overlay.classList.toggle("is-actual-size", showActualSize);
+      overlay.querySelector("[data-image-pdf-lightbox-fit]")?.classList.toggle("is-active", !showActualSize);
+      overlay.querySelector("[data-image-pdf-lightbox-actual]")?.classList.toggle("is-active", showActualSize);
+      return;
+    }
+
+    if (event.target === overlay || event.target.closest("[data-image-pdf-lightbox-close]")) {
+      closeImagePdfLightbox();
+    }
+  });
+  document.body.appendChild(overlay);
+  document.body.classList.add("is-image-pdf-lightbox-open");
+}
+
+function closeImagePdfLightbox() {
+  document.querySelector("[data-image-pdf-lightbox]")?.remove();
+  document.body.classList.remove("is-image-pdf-lightbox-open");
+}
+
+function handleImagePdfLightboxKeydown(event) {
+  if (event.key === "Escape") {
+    closeImagePdfLightbox();
+  }
 }
 
 function handleImagePdfQueueDragStart(event) {
@@ -605,8 +813,10 @@ function handleImagePdfViewChange(event) {
 function clearImagePdfItems() {
   imagePdfItems.forEach((item) => URL.revokeObjectURL(item.url));
   imagePdfItems = [];
+  closeImagePdfLightbox();
+  closeImagePdfPreview();
   renderImagePdfQueue();
-  setImagePdfStatus("Ready");
+  setImagePdfStatus("");
 }
 
 function handleImagePdfOptionInput(event) {
@@ -617,6 +827,10 @@ function handleImagePdfOptionInput(event) {
   if (event.currentTarget.dataset.imagePdfOption === "quality") {
     updateImagePdfQualityLabel();
   }
+
+  saveImagePdfSettings();
+  closeImagePdfPreview();
+  renderImagePdfParts();
 }
 
 function applyImagePdfCompressionPreset(mode) {
@@ -628,6 +842,49 @@ function applyImagePdfCompressionPreset(mode) {
   updateImagePdfQualityLabel();
 }
 
+function applySavedImagePdfSettings(root) {
+  const settings = loadImagePdfSettings();
+  root.querySelectorAll("[data-image-pdf-option]").forEach((node) => {
+    const key = node.dataset.imagePdfOption;
+    if (!key) return;
+    if (key === "rangeText") {
+      node.value = "";
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+      node.value = settings[key];
+    } else if (key === "partNamePattern") {
+      node.value = DEFAULT_IMAGE_PDF_PART_NAME_PATTERN;
+    }
+  });
+}
+
+function saveImagePdfSettings() {
+  const root = app.querySelector("[data-image-pdf-tool]");
+  if (!root) return;
+
+  const settings = {};
+  root.querySelectorAll("[data-image-pdf-option]").forEach((node) => {
+    const key = node.dataset.imagePdfOption;
+    if (key === "rangeText") return;
+    if (key) settings[key] = node.value;
+  });
+
+  try {
+    localStorage.setItem(IMAGE_PDF_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Local persistence is helpful, but not required for PDF creation.
+  }
+}
+
+function loadImagePdfSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(IMAGE_PDF_SETTINGS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
 async function exportImagePdf() {
   if (!imagePdfItems.length) {
     setImagePdfStatus("Add images first.");
@@ -635,15 +892,121 @@ async function exportImagePdf() {
   }
 
   const options = readImagePdfOptions();
+  beginImagePdfJob("Preparing PDF...");
   setImagePdfBusy(true);
   try {
     const pdfBlob = await createImagePdfBlob(imagePdfItems, options, ({ index, total, label }) => {
-      setImagePdfStatus(`Preparing ${index + 1}/${total}: ${label}`);
+      assertImagePdfNotCancelled();
+      setImagePdfProgress(index + 1, total, `Preparing ${index + 1}/${total}: ${label}`);
     });
+    assertImagePdfNotCancelled();
+    clearImagePdfProgress();
     downloadBlob(pdfBlob, `${sanitizePdfFilename(options.filename)}.pdf`);
     setImagePdfStatus(`PDF created: ${imagePdfItems.length} page${imagePdfItems.length === 1 ? "" : "s"}.`);
   } catch (error) {
-    setImagePdfStatus(error?.message || "PDF could not be created.");
+    clearImagePdfProgress();
+    setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || "PDF could not be created.");
+  } finally {
+    setImagePdfBusy(false);
+  }
+}
+
+async function handleImagePdfPartDownload(event) {
+  const button = event.target.closest("[data-image-pdf-part-download]");
+  if (!button) return;
+
+  const partIndex = Number(button.dataset.imagePdfPartDownload);
+  const parts = getImagePdfParts();
+  const part = parts[partIndex];
+  if (!part) return;
+
+  await exportImagePdfPart(part);
+}
+
+async function handleImagePdfPartPreview(event) {
+  const button = event.target.closest("[data-image-pdf-part-preview]");
+  if (!button) return;
+
+  const partIndex = Number(button.dataset.imagePdfPartPreview);
+  const parts = getImagePdfParts();
+  const part = parts[partIndex];
+  if (!part) return;
+
+  const options = readImagePdfOptions();
+  beginImagePdfJob(`Preparing preview: ${part.name}.pdf`);
+  setImagePdfBusy(true);
+  try {
+    const pdfBlob = await createImagePdfBlob(part.items, options, ({ index, total, label }) => {
+      assertImagePdfNotCancelled();
+      setImagePdfProgress(index + 1, total, `Preview part ${part.number}: ${index + 1}/${total}: ${label}`);
+    });
+    assertImagePdfNotCancelled();
+    clearImagePdfProgress();
+    showImagePdfPreview(part, pdfBlob);
+    setImagePdfStatus(`Preview ready: ${part.name}.pdf`);
+  } catch (error) {
+    clearImagePdfProgress();
+    setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || `Preview for part ${part.number} could not be created.`);
+  } finally {
+    setImagePdfBusy(false);
+  }
+}
+
+async function exportImagePdfPart(part) {
+  const options = readImagePdfOptions();
+  beginImagePdfJob(`Preparing ${part.name}.pdf`);
+  setImagePdfBusy(true);
+  try {
+    const pdfBlob = await createImagePdfBlob(part.items, options, ({ index, total, label }) => {
+      assertImagePdfNotCancelled();
+      setImagePdfStatus(`Preparing ${index + 1}/${total}: ${label}`);
+      setImagePdfProgress(index + 1, total, `Preparing part ${part.number}: ${index + 1}/${total}: ${label}`);
+    });
+    assertImagePdfNotCancelled();
+    clearImagePdfProgress();
+    downloadBlob(pdfBlob, `${sanitizePdfFilename(part.name)}.pdf`);
+    setImagePdfStatus(`Part ${part.number} created: pages ${part.startPage}-${part.endPage}.`);
+  } catch (error) {
+    clearImagePdfProgress();
+    setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || `Part ${part.number} could not be created.`);
+  } finally {
+    setImagePdfBusy(false);
+  }
+}
+
+async function exportAllImagePdfParts() {
+  if (!imagePdfItems.length) {
+    setImagePdfStatus("Add images first.");
+    return;
+  }
+
+  const parts = getImagePdfParts();
+  if (!parts.length) {
+    setImagePdfStatus("Enter pages per PDF first.");
+    return;
+  }
+
+  const options = readImagePdfOptions();
+  const totalPages = parts.reduce((sum, part) => sum + part.items.length, 0);
+  let completedPages = 0;
+  beginImagePdfJob(`Preparing ${parts.length} PDFs...`);
+  setImagePdfBusy(true);
+  try {
+    for (const part of parts) {
+      const pdfBlob = await createImagePdfBlob(part.items, options, ({ index, total, label }) => {
+        assertImagePdfNotCancelled();
+        setImagePdfProgress(completedPages + index + 1, totalPages, `Part ${part.number}/${parts.length}: ${index + 1}/${total}: ${label}`);
+      });
+      assertImagePdfNotCancelled();
+      downloadBlob(pdfBlob, `${sanitizePdfFilename(part.name)}.pdf`);
+      completedPages += part.items.length;
+      await waitForImagePdfDownloadQueue();
+    }
+    clearImagePdfProgress();
+    setImagePdfStatus(`${parts.length} PDFs created.`);
+  } catch (error) {
+    clearImagePdfProgress();
+    setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || "Split PDFs could not be created.");
   } finally {
     setImagePdfBusy(false);
   }
@@ -661,6 +1024,9 @@ function readImagePdfOptions() {
     quality: clamp(Number(read("quality", 92)), 60, 100),
     background: read("background", "#ffffff"),
     filename: read("filename", "image-to-pdf"),
+    splitSize: Math.max(0, Math.floor(Number(read("splitSize", 0)) || 0)),
+    partNamePattern: read("partNamePattern", DEFAULT_IMAGE_PDF_PART_NAME_PATTERN),
+    rangeText: read("rangeText", ""),
   };
 }
 
@@ -677,6 +1043,7 @@ function renderImagePdfQueue() {
 
   if (!imagePdfItems.length) {
     list.innerHTML = '<div class="image-pdf-empty">No images selected</div>';
+    renderImagePdfParts();
     return;
   }
 
@@ -697,8 +1064,8 @@ function renderImagePdfQueue() {
             <div class="image-pdf-item-meta">${escapeHtml(meta)}</div>
           </div>
           <div class="image-pdf-item-actions">
-            <button class="image-pdf-icon-button" data-image-pdf-item-action="rotate-left" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Rotate left">L</button>
-            <button class="image-pdf-icon-button" data-image-pdf-item-action="rotate-right" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Rotate right">R</button>
+            <button class="image-pdf-icon-button" data-image-pdf-item-action="rotate-left" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Rotate left" aria-label="Rotate left"><span class="image-pdf-rotate-glyph" aria-hidden="true">&#8634;</span></button>
+            <button class="image-pdf-icon-button" data-image-pdf-item-action="rotate-right" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Rotate right" aria-label="Rotate right"><span class="image-pdf-rotate-glyph" aria-hidden="true">&#8635;</span></button>
             <button class="image-pdf-icon-button" data-image-pdf-item-action="up" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Move up"${index === 0 ? " disabled" : ""}>^</button>
             <button class="image-pdf-icon-button" data-image-pdf-item-action="down" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Move down"${index === imagePdfItems.length - 1 ? " disabled" : ""}>v</button>
             <button class="image-pdf-icon-button is-danger" data-image-pdf-item-action="remove" data-image-pdf-item-id="${escapeHtml(item.id)}" title="Remove">x</button>
@@ -707,6 +1074,278 @@ function renderImagePdfQueue() {
       `;
     })
     .join("");
+  renderImagePdfParts();
+}
+
+function renderImagePdfParts() {
+  const list = app.querySelector("[data-image-pdf-split-list]");
+  if (!list) return;
+
+  const result = resolveImagePdfParts();
+  const parts = result.parts;
+  updateImagePdfSplitDownloadAll(parts);
+  renderImagePdfSplitEstimate(result);
+
+  if (result.error) {
+    list.hidden = false;
+    list.innerHTML = `<div class="image-pdf-part-note is-error">${escapeHtml(result.error)}</div>`;
+    return;
+  }
+
+  list.hidden = !parts.length;
+  list.innerHTML = parts
+    .map((part, index) => `
+      <div class="image-pdf-part-row">
+        <div class="image-pdf-part-copy">
+          <strong>${escapeHtml(part.name)}.pdf</strong>
+          <span>Pages ${part.startPage}-${part.endPage} | ${part.items.length} page${part.items.length === 1 ? "" : "s"} | approx ${formatBytes(part.estimatedBytes)}</span>
+        </div>
+        <div class="image-pdf-part-actions">
+          <button class="image-pdf-part-preview" data-image-pdf-part-preview="${index}" type="button">Preview</button>
+          <button class="image-pdf-part-download" data-image-pdf-part-download="${index}" type="button">Download</button>
+        </div>
+      </div>
+    `)
+    .join("");
+}
+
+function getImagePdfParts() {
+  return resolveImagePdfParts().parts;
+}
+
+function resolveImagePdfParts() {
+  const options = readImagePdfOptions();
+  const rangeText = options.rangeText.trim();
+  if (!imagePdfItems.length) return { parts: [], error: "", totalEstimatedBytes: 0, mode: "" };
+
+  if (rangeText) {
+    return resolveImagePdfRangeParts(options, rangeText);
+  }
+
+  const size = options.splitSize;
+  if (size < 1) return { parts: [], error: "", totalEstimatedBytes: 0, mode: "" };
+
+  const parts = [];
+  for (let start = 0; start < imagePdfItems.length; start += size) {
+    const end = Math.min(start + size, imagePdfItems.length);
+    parts.push(createImagePdfPart(start + 1, end));
+  }
+  return finalizeImagePdfParts(parts, options, "split");
+}
+
+function resolveImagePdfRangeParts(options, rangeText) {
+  const tokens = rangeText.split(",").map((token) => token.trim()).filter(Boolean);
+  if (!tokens.length) {
+    return { parts: [], error: "Use ranges like 1-5, 6-12.", totalEstimatedBytes: 0, mode: "ranges" };
+  }
+
+  const parts = [];
+  const splitSize = options.splitSize;
+  for (const token of tokens) {
+    const match = token.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!match) {
+      return { parts: [], error: `Range "${token}" is invalid. Use 1-5 or 7.`, totalEstimatedBytes: 0, mode: "ranges" };
+    }
+
+    const startPage = Number(match[1]);
+    const endPage = Number(match[2] || match[1]);
+    if (startPage < 1 || endPage < startPage) {
+      return { parts: [], error: `Range "${token}" is invalid.`, totalEstimatedBytes: 0, mode: "ranges" };
+    }
+    if (endPage > imagePdfItems.length) {
+      return { parts: [], error: `Range "${token}" exceeds ${imagePdfItems.length} images.`, totalEstimatedBytes: 0, mode: "ranges" };
+    }
+
+    if (splitSize > 0) {
+      for (let start = startPage; start <= endPage; start += splitSize) {
+        parts.push(createImagePdfPart(start, Math.min(start + splitSize - 1, endPage)));
+      }
+    } else {
+      parts.push(createImagePdfPart(startPage, endPage));
+    }
+  }
+
+  return finalizeImagePdfParts(parts, options, splitSize > 0 ? "range-split" : "ranges");
+}
+
+function createImagePdfPart(startPage, endPage) {
+  return {
+    startPage,
+    endPage,
+    items: imagePdfItems.slice(startPage - 1, endPage),
+  };
+}
+
+function finalizeImagePdfParts(parts, options, mode) {
+  const totalParts = parts.length;
+  const finalized = parts.map((part, index) => {
+    const number = index + 1;
+    const estimatedBytes = estimateImagePdfPartSize(part.items, options);
+    return {
+      ...part,
+      number,
+      totalParts,
+      estimatedBytes,
+      name: formatImagePdfPartName(options.partNamePattern, options.filename, {
+        ...part,
+        number,
+        totalParts,
+      }),
+    };
+  });
+
+  return {
+    parts: finalized,
+    error: "",
+    totalEstimatedBytes: finalized.reduce((sum, part) => sum + part.estimatedBytes, 0),
+    mode,
+  };
+}
+
+function formatImagePdfPartName(pattern, baseName, part) {
+  const fallbackName = String(baseName || "image-to-pdf").trim() || "image-to-pdf";
+  const template = String(pattern || DEFAULT_IMAGE_PDF_PART_NAME_PATTERN).trim() || DEFAULT_IMAGE_PDF_PART_NAME_PATTERN;
+  const values = {
+    name: fallbackName,
+    n: part.number,
+    part: part.number,
+    start: part.startPage,
+    end: part.endPage,
+    total: part.totalParts,
+    count: part.items.length,
+    pages: part.items.length,
+  };
+  const formatted = template.replace(/\{(name|n|part|start|end|total|count|pages)\}/g, (_, key) => values[key]);
+  return formatted.trim() || `${fallbackName} part ${part.number}`;
+}
+
+function estimateImagePdfPartSize(items, options) {
+  const rawBytes = items.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+  const compressionFactor = {
+    high: 0.95,
+    balanced: 0.72,
+    small: 0.48,
+  }[options.compressionMode] || 0.72;
+  const qualityFactor = clamp(Number(options.quality || 92), 60, 100) / 92;
+  const minimumRasterEstimate = items.length * 24000;
+  const pdfOverhead = 1800 + items.length * 1400;
+  return Math.max(minimumRasterEstimate, Math.round(rawBytes * compressionFactor * qualityFactor)) + pdfOverhead;
+}
+
+function renderImagePdfSplitEstimate(result = resolveImagePdfParts()) {
+  const estimate = app.querySelector("[data-image-pdf-split-estimate]");
+  if (!estimate) return;
+
+  if (!result.parts.length || result.error) {
+    estimate.hidden = true;
+    estimate.textContent = "";
+    return;
+  }
+
+  const modeLabel = result.mode === "ranges" ? "Manual ranges" : result.mode === "range-split" ? "Range split" : "Auto split";
+  estimate.hidden = false;
+  estimate.textContent = `${modeLabel}: ${result.parts.length} PDF${result.parts.length === 1 ? "" : "s"} | approx ${formatBytes(result.totalEstimatedBytes)}`;
+}
+
+function updateImagePdfSplitDownloadAll(parts = getImagePdfParts()) {
+  const button = app.querySelector("[data-image-pdf-split-download-all]");
+  if (!button) return;
+  button.disabled = !parts.length;
+}
+
+function waitForImagePdfDownloadQueue() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 120);
+  });
+}
+
+function showImagePdfPreview(part, pdfBlob) {
+  const preview = app.querySelector("[data-image-pdf-preview]");
+  if (!preview) return;
+
+  closeImagePdfPreview();
+  imagePdfPreviewUrl = URL.createObjectURL(pdfBlob);
+  preview.hidden = false;
+  preview.innerHTML = `
+    <div class="image-pdf-preview-head">
+      <div class="image-pdf-preview-title">
+        <strong>${escapeHtml(part.name)}.pdf</strong>
+        <span>${part.items.length} page${part.items.length === 1 ? "" : "s"} | ${formatBytes(pdfBlob.size)}</span>
+      </div>
+      <button class="image-pdf-preview-close" data-image-pdf-preview-close type="button">Close</button>
+    </div>
+    <iframe class="image-pdf-preview-frame" src="${escapeHtml(imagePdfPreviewUrl)}" title="${escapeHtml(part.name)} preview"></iframe>
+  `;
+}
+
+function handleImagePdfPreviewAction(event) {
+  if (event.target.closest("[data-image-pdf-preview-close]")) {
+    closeImagePdfPreview();
+  }
+}
+
+function closeImagePdfPreview() {
+  if (imagePdfPreviewUrl) {
+    URL.revokeObjectURL(imagePdfPreviewUrl);
+    imagePdfPreviewUrl = "";
+  }
+
+  const preview = app.querySelector("[data-image-pdf-preview]");
+  if (!preview) return;
+  preview.hidden = true;
+  preview.innerHTML = "";
+}
+
+function beginImagePdfJob(message) {
+  imagePdfCancelRequested = false;
+  setImagePdfProgress(0, 1, message, true);
+}
+
+function cancelImagePdfJob() {
+  imagePdfCancelRequested = true;
+  const button = app.querySelector("[data-image-pdf-cancel]");
+  if (button) button.disabled = true;
+  setImagePdfStatus("Cancelling...");
+}
+
+function assertImagePdfNotCancelled() {
+  if (imagePdfCancelRequested) {
+    throw new Error(IMAGE_PDF_CANCELLED_MESSAGE);
+  }
+}
+
+function isImagePdfCancelError(error) {
+  return error?.message === IMAGE_PDF_CANCELLED_MESSAGE;
+}
+
+function setImagePdfProgress(current, total, label, canCancel = true) {
+  const progress = app.querySelector("[data-image-pdf-progress]");
+  const progressBar = app.querySelector("[data-image-pdf-progress-bar]");
+  const cancelButton = app.querySelector("[data-image-pdf-cancel]");
+  const safeTotal = Math.max(1, Number(total) || 1);
+  const safeCurrent = clamp(Number(current) || 0, 0, safeTotal);
+  const percent = Math.round((safeCurrent / safeTotal) * 100);
+
+  if (progress) progress.hidden = false;
+  if (progressBar) progressBar.style.width = `${percent}%`;
+  if (cancelButton) {
+    cancelButton.hidden = !canCancel;
+    cancelButton.disabled = !canCancel;
+  }
+  setImagePdfStatus(label || `${percent}%`);
+}
+
+function clearImagePdfProgress() {
+  const progress = app.querySelector("[data-image-pdf-progress]");
+  const progressBar = app.querySelector("[data-image-pdf-progress-bar]");
+  const cancelButton = app.querySelector("[data-image-pdf-cancel]");
+  if (progress) progress.hidden = true;
+  if (progressBar) progressBar.style.width = "0%";
+  if (cancelButton) {
+    cancelButton.hidden = true;
+    cancelButton.disabled = false;
+  }
+  imagePdfCancelRequested = false;
 }
 
 function updateImagePdfQualityLabel() {
@@ -717,15 +1356,642 @@ function updateImagePdfQualityLabel() {
 
 function setImagePdfStatus(message) {
   const status = app.querySelector("[data-image-pdf-status]");
-  if (status) status.textContent = message;
+  if (!status) return;
+  const summary = status.closest(".image-pdf-summary");
+  const progress = app.querySelector("[data-image-pdf-progress]");
+  const text = String(message || "").trim();
+  const isIdle = !text || text === "Ready";
+  status.textContent = isIdle ? "" : text;
+  if (summary) summary.hidden = isIdle && (!progress || progress.hidden);
 }
 
 function setImagePdfBusy(isBusy) {
   const root = app.querySelector("[data-image-pdf-tool]");
   root?.querySelectorAll("button, input, select").forEach((node) => {
     if (node.matches("[data-image-pdf-file]")) return;
+    if (node.matches("[data-image-pdf-cancel]")) return;
     node.disabled = isBusy;
   });
+  if (!isBusy) updateImagePdfSplitDownloadAll();
+}
+
+function applySavedImageResizeSettings(root) {
+  const settings = loadImageResizeSettings();
+  root.querySelectorAll("[data-image-resize-option]").forEach((node) => {
+    const key = node.dataset.imageResizeOption;
+    if (!key || key === "scaleSlider") return;
+    if (!Object.prototype.hasOwnProperty.call(settings, key)) return;
+    if (node.type === "checkbox") {
+      node.checked = Boolean(settings[key]);
+    } else {
+      node.value = settings[key];
+    }
+  });
+
+  const scale = root.querySelector('[data-image-resize-option="scale"]')?.value || "100";
+  const scaleSlider = root.querySelector('[data-image-resize-option="scaleSlider"]');
+  if (scaleSlider) scaleSlider.value = scale;
+}
+
+function saveImageResizeSettings() {
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!root) return;
+
+  const settings = {};
+  root.querySelectorAll("[data-image-resize-option]").forEach((node) => {
+    const key = node.dataset.imageResizeOption;
+    if (!key || key === "scaleSlider") return;
+    settings[key] = node.type === "checkbox" ? node.checked : node.value;
+  });
+
+  try {
+    localStorage.setItem(IMAGE_RESIZE_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Resize preferences are optional.
+  }
+}
+
+function loadImageResizeSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(IMAGE_RESIZE_SETTINGS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+async function addImageResizeFiles(fileList) {
+  const files = normalizeImagePdfFiles(fileList);
+  if (!files.length) {
+    setImageResizeStatus("No image files selected.");
+    return;
+  }
+
+  setImageResizeStatus("Adding images...");
+  const knownSignatures = new Set(imageResizeItems.map((item) => item.signature).filter(Boolean));
+  let addedCount = 0;
+  let duplicateCount = 0;
+  let failedCount = 0;
+
+  for (const file of files) {
+    const signature = await createImagePdfFileSignature(file);
+    if (knownSignatures.has(signature)) {
+      duplicateCount += 1;
+      continue;
+    }
+    knownSignatures.add(signature);
+
+    const item = {
+      id: createImagePdfId(),
+      file,
+      name: file.name || "image",
+      size: file.size || 0,
+      type: file.type || "image",
+      signature,
+      url: URL.createObjectURL(file),
+      width: 0,
+      height: 0,
+    };
+
+    try {
+      const dimensions = await readImagePdfDimensions(item.url);
+      item.width = dimensions.width;
+      item.height = dimensions.height;
+    } catch {
+      URL.revokeObjectURL(item.url);
+      failedCount += 1;
+      continue;
+    }
+
+    imageResizeItems.push(item);
+    firstAddedId = firstAddedId || item.id;
+    addedCount += 1;
+  }
+
+  if (firstAddedId && !imageResizeSelectedId) {
+    imageResizeSelectedId = firstAddedId;
+  }
+  ensureImageResizeSelection();
+
+  if (addedCount && imageResizeItems.length === addedCount) {
+    applyImageResizeScaleToDimensions();
+  }
+
+  renderImageResizeQueue();
+  updateImageResizeWorkspace();
+  const messages = [];
+  if (addedCount) messages.push(`${addedCount} added`);
+  if (duplicateCount) messages.push(`${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped`);
+  if (failedCount) messages.push(`${failedCount} failed`);
+  setImageResizeStatus(messages.length ? `${messages.join(". ")}. ${imageResizeItems.length} total.` : "No new images added.");
+}
+
+function clearImageResizeItems() {
+  imageResizeItems.forEach((item) => URL.revokeObjectURL(item.url));
+  imageResizeItems = [];
+  imageResizeSelectedId = "";
+  renderImageResizeQueue();
+  updateImageResizeWorkspace();
+  setImageResizeStatus("");
+}
+
+function handleImageResizeListAction(event) {
+  const button = event.target.closest("[data-image-resize-item-action]");
+  const itemNode = event.target.closest("[data-image-resize-item]");
+
+  if (!button && itemNode) {
+    imageResizeSelectedId = itemNode.dataset.imageResizeItemId || "";
+    applyImageResizeScaleToDimensions();
+    renderImageResizeQueue();
+    updateImageResizeWorkspace();
+    return;
+  }
+
+  if (!button) return;
+
+  const index = imageResizeItems.findIndex((item) => item.id === button.dataset.imageResizeItemId);
+  if (index < 0) return;
+
+  if (button.dataset.imageResizeItemAction === "remove") {
+    const removedId = imageResizeItems[index].id;
+    URL.revokeObjectURL(imageResizeItems[index].url);
+    imageResizeItems.splice(index, 1);
+    if (imageResizeSelectedId === removedId) {
+      imageResizeSelectedId = imageResizeItems[Math.min(index, imageResizeItems.length - 1)]?.id || "";
+      applyImageResizeScaleToDimensions();
+    }
+    ensureImageResizeSelection();
+    renderImageResizeQueue();
+    updateImageResizeWorkspace();
+    setImageResizeStatus(`${imageResizeItems.length} image${imageResizeItems.length === 1 ? "" : "s"} ready.`);
+  }
+}
+
+function handleImageResizeOptionInput(event) {
+  const option = event.currentTarget.dataset.imageResizeOption;
+  if (option === "scale" || option === "scaleSlider") {
+    syncImageResizeScale(option);
+    applyImageResizeScaleToDimensions();
+  } else if (option === "width" || option === "height") {
+    syncImageResizeLockedDimension(option);
+  } else if (option === "unit" || option === "dpi") {
+    applyImageResizeScaleToDimensions();
+  } else if (option === "lockRatio") {
+    syncImageResizeLockedDimension("width");
+  }
+
+  syncImageResizeLabels();
+  saveImageResizeSettings();
+  renderImageResizeQueue();
+  updateImageResizeWorkspace();
+}
+
+function syncImageResizeScale(source) {
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!root) return;
+
+  const scale = root.querySelector('[data-image-resize-option="scale"]');
+  const slider = root.querySelector('[data-image-resize-option="scaleSlider"]');
+  const sourceNode = source === "scaleSlider" ? slider : scale;
+  const value = clamp(Math.round(Number(sourceNode?.value || 100)), 1, 500);
+
+  if (scale) scale.value = String(value);
+  if (slider) slider.value = String(value);
+}
+
+function applyImageResizeScaleToDimensions() {
+  const first = getSelectedImageResizeItem();
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!first || !root) return;
+
+  const options = readImageResizeOptions();
+  const widthInput = root.querySelector('[data-image-resize-option="width"]');
+  const heightInput = root.querySelector('[data-image-resize-option="height"]');
+  const scale = clamp(Number(options.scale) || 100, 1, 500) / 100;
+
+  if (widthInput) widthInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.width * scale, options.unit, options.dpi), options.unit);
+  if (heightInput) heightInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.height * scale, options.unit, options.dpi), options.unit);
+}
+
+function syncImageResizeLockedDimension(changedOption) {
+  const first = getSelectedImageResizeItem();
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!first || !root) return;
+
+  const lock = root.querySelector('[data-image-resize-option="lockRatio"]')?.checked ?? true;
+  if (!lock) return;
+
+  const options = readImageResizeOptions();
+  const widthInput = root.querySelector('[data-image-resize-option="width"]');
+  const heightInput = root.querySelector('[data-image-resize-option="height"]');
+  const ratio = first.width > 0 && first.height > 0 ? first.width / first.height : 1;
+  const width = Number(widthInput?.value || 0);
+  const height = Number(heightInput?.value || 0);
+
+  if (changedOption === "height" && height > 0 && widthInput) {
+    widthInput.value = formatImageResizeUnitValue(height * ratio, options.unit);
+  } else if (width > 0 && heightInput) {
+    heightInput.value = formatImageResizeUnitValue(width / ratio, options.unit);
+  }
+}
+
+function syncImageResizeLabels() {
+  const root = app.querySelector("[data-image-resize-tool]");
+  if (!root) return;
+
+  const scale = clamp(Math.round(Number(root.querySelector('[data-image-resize-option="scale"]')?.value || 100)), 1, 500);
+  const quality = clamp(Math.round(Number(root.querySelector('[data-image-resize-option="quality"]')?.value || 92)), 20, 100);
+  const scaleLabel = root.querySelector("[data-image-resize-scale-value]");
+  const qualityLabel = root.querySelector("[data-image-resize-quality-value]");
+  if (scaleLabel) scaleLabel.textContent = `${scale}%`;
+  if (qualityLabel) qualityLabel.textContent = `${quality}%`;
+}
+
+function readImageResizeOptions() {
+  const root = app.querySelector("[data-image-resize-tool]");
+  const read = (key, fallback = "") => root?.querySelector(`[data-image-resize-option="${key}"]`)?.value || fallback;
+  return {
+    unit: normalizeImageResizeUnit(read("unit", "px")),
+    dpi: clamp(Number(read("dpi", 300)) || 300, 1, 1200),
+    width: Math.max(0, Number(read("width", 0)) || 0),
+    height: Math.max(0, Number(read("height", 0)) || 0),
+    lockRatio: root?.querySelector('[data-image-resize-option="lockRatio"]')?.checked ?? true,
+    scale: clamp(Number(read("scale", 100)) || 100, 1, 500),
+    targetSize: Math.max(0, Number(read("targetSize", 0)) || 0),
+    targetUnit: read("targetUnit", "kb") === "mb" ? "mb" : "kb",
+    quality: clamp(Number(read("quality", 92)) || 92, 20, 100),
+    suffix: read("suffix", "resized"),
+  };
+}
+
+function getSelectedImageResizeItem() {
+  return imageResizeItems.find((item) => item.id === imageResizeSelectedId) || imageResizeItems[0] || null;
+}
+
+function ensureImageResizeSelection() {
+  if (!imageResizeItems.length) {
+    imageResizeSelectedId = "";
+    return null;
+  }
+
+  const selected = imageResizeItems.find((item) => item.id === imageResizeSelectedId) || imageResizeItems[0];
+  imageResizeSelectedId = selected.id;
+  return selected;
+}
+
+function updateImageResizeWorkspace() {
+  ensureImageResizeSelection();
+  updateImageResizeLiveSize();
+  drawImageResizePreview();
+}
+
+function updateImageResizeLiveSize() {
+  const item = getSelectedImageResizeItem();
+  const original = app.querySelector("[data-image-resize-live-original]");
+  const output = app.querySelector("[data-image-resize-live-output]");
+  const size = app.querySelector("[data-image-resize-live-size]");
+  const title = app.querySelector("[data-image-resize-selected-name]");
+  const meta = app.querySelector("[data-image-resize-selected-meta]");
+
+  if (!item) {
+    if (original) original.textContent = "-";
+    if (output) output.textContent = "-";
+    if (size) size.textContent = "-";
+    if (title) title.textContent = "No image selected";
+    if (meta) meta.textContent = "";
+    return;
+  }
+
+  const options = readImageResizeOptions();
+  const dimensions = getImageResizeOutputPixels(item, options, false);
+  const outputText = dimensions.error ? dimensions.error : `${dimensions.width} x ${dimensions.height} px`;
+  const estimate = dimensions.error ? "-" : estimateImageResizeOutputSize(item, dimensions, options);
+  if (original) original.textContent = `${item.width || "-"} x ${item.height || "-"} px | ${formatBytes(item.size)}`;
+  if (output) output.textContent = outputText;
+  if (size) size.textContent = estimate;
+  if (title) title.textContent = item.name || "image";
+  if (meta) meta.textContent = `${outputText} | ${options.unit.toUpperCase()} | ${options.dpi} DPI`;
+}
+
+function estimateImageResizeOutputSize(item, dimensions, options) {
+  const targetBytes = getImageResizeTargetBytes(options);
+  if (targetBytes > 0) return `Target ${formatBytes(targetBytes)}`;
+
+  const originalPixels = Math.max(1, (item.width || 1) * (item.height || 1));
+  const outputPixels = Math.max(1, dimensions.width * dimensions.height);
+  const pixelRatio = outputPixels / originalPixels;
+  const qualityRatio = clamp(Number(options.quality || 92), 20, 100) / 92;
+  const estimated = Math.max(1024, Math.round((Number(item.size) || 0) * pixelRatio * qualityRatio));
+  return `~${formatBytes(estimated)}`;
+}
+
+async function drawImageResizePreview() {
+  const canvas = app.querySelector("[data-image-resize-canvas]");
+  const empty = app.querySelector("[data-image-resize-canvas-empty]");
+  const item = getSelectedImageResizeItem();
+  if (!canvas) return;
+
+  const context = canvas.getContext("2d");
+  const token = imageResizePreviewDrawToken + 1;
+  imageResizePreviewDrawToken = token;
+
+  if (!item || !context) {
+    canvas.hidden = true;
+    if (empty) empty.hidden = false;
+    canvas.width = 1;
+    canvas.height = 1;
+    context?.clearRect(0, 0, 1, 1);
+    return;
+  }
+
+  const options = readImageResizeOptions();
+  const dimensions = getImageResizeOutputPixels(item, options, false);
+  if (dimensions.error) {
+    canvas.hidden = true;
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = dimensions.error;
+    }
+    return;
+  }
+
+  if (empty) empty.hidden = true;
+  canvas.hidden = false;
+
+  try {
+    const image = await loadImageElement(item.url);
+    if (token !== imageResizePreviewDrawToken) return;
+
+    const scale = getImageResizePreviewScale(dimensions.width, dimensions.height);
+    const previewWidth = Math.max(1, Math.round(dimensions.width * scale));
+    const previewHeight = Math.max(1, Math.round(dimensions.height * scale));
+    canvas.width = previewWidth;
+    canvas.height = previewHeight;
+    canvas.style.aspectRatio = `${previewWidth} / ${previewHeight}`;
+    context.clearRect(0, 0, previewWidth, previewHeight);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, previewWidth, previewHeight);
+  } catch {
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "Preview failed";
+    }
+    canvas.hidden = true;
+  }
+}
+
+function getImageResizePreviewScale(width, height) {
+  const maxDimension = 2400;
+  const maxPixels = 4000000;
+  const dimensionScale = Math.min(maxDimension / Math.max(1, width), maxDimension / Math.max(1, height), 1);
+  const pixelScale = Math.min(Math.sqrt(maxPixels / Math.max(1, width * height)), 1);
+  return Math.max(0.02, Math.min(dimensionScale, pixelScale));
+}
+
+function renderImageResizeQueue() {
+  const list = app.querySelector("[data-image-resize-list]");
+  const count = app.querySelector("[data-image-resize-count]");
+  if (!list) return;
+
+  if (count) {
+    count.textContent = `${imageResizeItems.length} image${imageResizeItems.length === 1 ? "" : "s"}`;
+  }
+
+  if (!imageResizeItems.length) {
+    list.innerHTML = '<div class="image-pdf-empty">No images selected</div>';
+    return;
+  }
+
+  const options = readImageResizeOptions();
+  list.innerHTML = imageResizeItems
+    .map((item) => {
+      const output = getImageResizeOutputPixels(item, options, false);
+      const outputMeta = output.error ? output.error : `${output.width} x ${output.height} px`;
+      const meta = `${item.width || "-"} x ${item.height || "-"} px | ${formatBytes(item.size)} -> ${outputMeta}`;
+      const activeClass = item.id === imageResizeSelectedId ? " is-active" : "";
+      return `
+        <article class="image-resize-item${activeClass}" data-image-resize-item data-image-resize-item-id="${escapeHtml(item.id)}">
+          <div class="image-resize-thumb-frame">
+            <img class="image-resize-thumb" src="${escapeHtml(item.url)}" alt="" draggable="false" />
+          </div>
+          <div class="image-resize-item-main">
+            <div class="image-resize-item-name">${escapeHtml(item.name)}</div>
+            <div class="image-resize-item-meta">${escapeHtml(meta)}</div>
+          </div>
+          <button class="image-pdf-icon-button is-danger" data-image-resize-item-action="remove" data-image-resize-item-id="${escapeHtml(item.id)}" type="button" title="Remove">x</button>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function getImageResizeOutputPixels(item, options, shouldThrow = true) {
+  const ratio = item.width > 0 && item.height > 0 ? item.width / item.height : 1;
+  const scale = clamp(Number(options.scale) || 100, 1, 500) / 100;
+  const hasWidth = options.width > 0;
+  const hasHeight = options.height > 0;
+  let width = hasWidth ? imageResizeUnitToPixels(options.width, options.unit, options.dpi) : item.width * scale;
+  let height = hasHeight ? imageResizeUnitToPixels(options.height, options.unit, options.dpi) : item.height * scale;
+
+  if (options.lockRatio) {
+    if (hasWidth && !hasHeight) {
+      height = width / ratio;
+    } else if (!hasWidth && hasHeight) {
+      width = height * ratio;
+    }
+  }
+
+  width = Math.max(1, Math.round(width));
+  height = Math.max(1, Math.round(height));
+
+  const error = validateImageResizePixels(width, height);
+  if (error && shouldThrow) throw new Error(error);
+  return { width, height, error };
+}
+
+function validateImageResizePixels(width, height) {
+  if (width > IMAGE_RESIZE_MAX_DIMENSION || height > IMAGE_RESIZE_MAX_DIMENSION || width * height > IMAGE_RESIZE_MAX_PIXELS) {
+    return "Output size too large";
+  }
+  return "";
+}
+
+function normalizeImageResizeUnit(value) {
+  if (value === "cm" || value === "m") return value;
+  return "px";
+}
+
+function imageResizeUnitToPixels(value, unit, dpi) {
+  if (unit === "cm") return (value / 2.54) * dpi;
+  if (unit === "m") return ((value * 100) / 2.54) * dpi;
+  return value;
+}
+
+function pixelsToImageResizeUnit(pixels, unit, dpi) {
+  if (unit === "cm") return (pixels / dpi) * 2.54;
+  if (unit === "m") return ((pixels / dpi) * 2.54) / 100;
+  return pixels;
+}
+
+function formatImageResizeUnitValue(value, unit) {
+  if (unit === "px") return String(Math.max(1, Math.round(value)));
+  const precision = unit === "m" ? 4 : 2;
+  return String(Math.round(value * 10 ** precision) / 10 ** precision);
+}
+
+async function downloadImageResizeFormat(format) {
+  const safeFormat = normalizeImageResizeFormat(format);
+  if (!imageResizeItems.length) {
+    setImageResizeStatus("Add images first.");
+    return;
+  }
+
+  const options = readImageResizeOptions();
+  const targetBytes = getImageResizeTargetBytes(options);
+  setImageResizeBusy(true);
+  try {
+    for (let index = 0; index < imageResizeItems.length; index += 1) {
+      const item = imageResizeItems[index];
+      setImageResizeStatus(`Preparing ${index + 1}/${imageResizeItems.length}: ${item.name}`);
+      const result = await createImageResizeBlob(item, safeFormat, options, targetBytes);
+      downloadBlob(result.blob, formatImageResizeFileName(item.name, options.suffix, safeFormat));
+      await waitForImagePdfDownloadQueue();
+    }
+
+    const targetNote = safeFormat === "png" && targetBytes ? " PNG keeps browser lossless output." : "";
+    setImageResizeStatus(`${imageResizeItems.length} ${safeFormat.toUpperCase()} file${imageResizeItems.length === 1 ? "" : "s"} downloaded.${targetNote}`);
+  } catch (error) {
+    setImageResizeStatus(error?.message || "Images could not be resized.");
+  } finally {
+    setImageResizeBusy(false);
+  }
+}
+
+async function createImageResizeBlob(item, format, options, targetBytes = 0) {
+  const image = await loadImageElement(item.url);
+  const dimensions = getImageResizeOutputPixels(item, options);
+  const canvas = document.createElement("canvas");
+  canvas.width = dimensions.width;
+  canvas.height = dimensions.height;
+  const context = canvas.getContext("2d", { alpha: format !== "jpg" });
+  if (!context) throw new Error("Canvas is not available.");
+
+  if (format === "jpg") {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, dimensions.width, dimensions.height);
+  } else {
+    context.clearRect(0, 0, dimensions.width, dimensions.height);
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
+
+  const mimeType = imageResizeFormatMime(format);
+  if (targetBytes > 0 && format !== "png") {
+    return createTargetedImageResizeBlob(canvas, mimeType, options.quality / 100, targetBytes, dimensions);
+  }
+
+  const blob = await canvasToImageBlob(canvas, mimeType, format === "png" ? undefined : options.quality / 100);
+  return { blob, ...dimensions, quality: format === "png" ? 100 : options.quality };
+}
+
+function loadImageElement(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
+}
+
+function canvasToImageBlob(canvas, mimeType, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("Image export failed."));
+      }
+    }, mimeType, quality);
+  });
+}
+
+async function createTargetedImageResizeBlob(canvas, mimeType, maxQuality, targetBytes, dimensions) {
+  let low = 0.1;
+  let high = clamp(maxQuality, 0.2, 1);
+  let best = null;
+  let bestQuality = low;
+  let smallest = null;
+  let smallestQuality = low;
+
+  for (let index = 0; index < 8; index += 1) {
+    const quality = (low + high) / 2;
+    const blob = await canvasToImageBlob(canvas, mimeType, quality);
+    if (!smallest || blob.size < smallest.size) {
+      smallest = blob;
+      smallestQuality = quality;
+    }
+    if (blob.size <= targetBytes) {
+      best = blob;
+      bestQuality = quality;
+      low = quality;
+    } else {
+      high = quality;
+    }
+  }
+
+  return {
+    blob: best || smallest,
+    ...dimensions,
+    quality: Math.round((best ? bestQuality : smallestQuality) * 100),
+  };
+}
+
+function normalizeImageResizeFormat(format) {
+  if (format === "png" || format === "webp") return format;
+  return "jpg";
+}
+
+function imageResizeFormatMime(format) {
+  if (format === "png") return "image/png";
+  if (format === "webp") return "image/webp";
+  return "image/jpeg";
+}
+
+function getImageResizeTargetBytes(options) {
+  if (!options.targetSize) return 0;
+  const multiplier = options.targetUnit === "mb" ? 1024 * 1024 : 1024;
+  return Math.max(0, Math.round(options.targetSize * multiplier));
+}
+
+function formatImageResizeFileName(name, suffix, format) {
+  const base = stripImageResizeExtension(name) || "image";
+  const cleanSuffix = sanitizePdfFilename(suffix || "resized");
+  const cleanBase = sanitizePdfFilename(base);
+  const extension = format === "jpg" ? "jpg" : format;
+  return `${cleanBase}${cleanSuffix ? `-${cleanSuffix}` : ""}.${extension}`;
+}
+
+function stripImageResizeExtension(name) {
+  return String(name || "").replace(/\.[a-z0-9]+$/i, "");
+}
+
+function setImageResizeBusy(isBusy) {
+  const root = app.querySelector("[data-image-resize-tool]");
+  root?.querySelectorAll("button, input, select").forEach((node) => {
+    if (node.matches("[data-image-resize-file]")) return;
+    node.disabled = isBusy;
+  });
+}
+
+function setImageResizeStatus(message) {
+  const status = app.querySelector("[data-image-resize-status]");
+  if (!status) return;
+  const summary = status.closest(".image-resize-summary");
+  const text = String(message || "").trim();
+  status.textContent = text;
+  if (summary) summary.hidden = !text;
 }
 
 function createImagePdfId() {
@@ -775,6 +2041,11 @@ function handleAction(event) {
       state.selectedDrawingId = "";
       state.cropMode = false;
     }
+    render();
+    return;
+  }
+  if (action === "select-image-tool") {
+    state.imageToolMode = normalizeImageToolMode(node.dataset.imageTool);
     render();
     return;
   }
@@ -927,19 +2198,19 @@ function handleEquationPaste(event) {
 
   event.preventDefault();
   recordUndo();
-  insertIntoEquationInput(smartCleanMathInput(pasted));
+  insertIntoEquationInput(smartCleanMathInput(pasted), { source: "paste" });
 }
 
-function insertIntoEquationInput(rawText) {
+function insertIntoEquationInput(rawText, options = {}) {
   const textarea = app.querySelector(".equation-input[data-bind='input']");
   const current = state.input || "";
   const start = Number.isInteger(textarea?.selectionStart) ? textarea.selectionStart : current.length;
   const end = Number.isInteger(textarea?.selectionEnd) ? textarea.selectionEnd : start;
   const markerIndex = rawText.indexOf("|");
   const insertText = rawText.replace("|", "");
-  const cursorOffset = markerIndex >= 0 ? markerIndex : insertText.length;
-  const nextValue = `${current.slice(0, start)}${insertText}${current.slice(end)}`;
-  const nextCursor = start + cursorOffset;
+  const insertion = buildEquationInsertion(current, start, end, insertText, markerIndex, options);
+  const nextValue = insertion.value;
+  const nextCursor = insertion.cursor;
 
   state.input = nextValue;
   state.visualOverride = "";
@@ -954,6 +2225,37 @@ function insertIntoEquationInput(rawText) {
 
   updateInputOutputInline();
   saveState(state);
+}
+
+function buildEquationInsertion(current, start, end, insertText, markerIndex, options = {}) {
+  const cursorOffset = markerIndex >= 0 ? markerIndex : insertText.length;
+  const isPaste = options.source === "paste";
+  const isCollapsedSelection = start === end;
+  const shouldCreateBlock = isPaste && markerIndex < 0 && isCollapsedSelection && current.trim() && looksLikeCompleteEquation(insertText);
+
+  if (!shouldCreateBlock) {
+    return {
+      value: `${current.slice(0, start)}${insertText}${current.slice(end)}`,
+      cursor: start + cursorOffset,
+    };
+  }
+
+  const trimmedInsert = insertText.trim();
+  const before = current.slice(0, start).replace(/[ \t\r\n]+$/g, "");
+  const after = current.slice(end).replace(/^[ \t\r\n]+/g, "");
+  const prefix = before ? "\n\n" : "";
+  const suffix = after ? "\n\n" : "";
+  const value = `${before}${prefix}${trimmedInsert}${suffix}${after}`;
+
+  return {
+    value,
+    cursor: `${before}${prefix}${trimmedInsert}`.length,
+  };
+}
+
+function looksLikeCompleteEquation(value = "") {
+  const text = String(value).trim();
+  return text.length >= 18 && /\\(?:left|frac|sqrt|begin)|=|\?/.test(text);
 }
 
 function smartCleanEditorInput() {
@@ -1036,6 +2338,162 @@ function handleVisualEdit(event) {
   recordUndo();
   state.visualOverride = event.currentTarget.innerHTML;
   saveState(state);
+}
+
+function handleCanvasCopy(event) {
+  const editor = event.currentTarget;
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || selection.isCollapsed || !isSelectionInsideNode(selection, editor)) return;
+
+  event.preventDefault();
+  writeCanvasSelectionToClipboard(event.clipboardData, selection);
+}
+
+function handleCanvasCut(event) {
+  const editor = event.currentTarget;
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount || selection.isCollapsed || !isSelectionInsideNode(selection, editor)) return;
+
+  event.preventDefault();
+  recordUndo();
+  writeCanvasSelectionToClipboard(event.clipboardData, selection);
+  selection.deleteFromDocument();
+  state.visualOverride = editor.innerHTML;
+  saveState(state);
+  requestAnimationFrame(fitEquationPreview);
+}
+
+function handleCanvasPaste(event) {
+  const editor = event.currentTarget;
+  const text = event.clipboardData?.getData("text/plain") || "";
+  const html = event.clipboardData?.getData("text/html") || "";
+  if (!text && !html) return;
+
+  event.preventDefault();
+  recordUndo();
+  ensureCanvasSelection(editor);
+
+  if (isCanvasCopyHtml(html)) {
+    insertHtmlAtCanvasSelection(sanitizeCanvasPasteHtml(html), editor);
+  } else if (shouldRenderCanvasLatex(text)) {
+    const cleaned = smartCleanMathInput(text);
+    insertHtmlAtCanvasSelection(renderMathMl(cleaned).mathMl, editor);
+  } else {
+    insertTextAtCanvasSelection(text, editor);
+  }
+
+  state.visualOverride = editor.innerHTML;
+  saveState(state);
+  requestAnimationFrame(fitEquationPreview);
+}
+
+function writeCanvasSelectionToClipboard(clipboardData, selection) {
+  if (!clipboardData || !selection.rangeCount) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("data-equation-canvas-copy", "true");
+  wrapper.append(selection.getRangeAt(0).cloneContents());
+  const html = sanitizeCanvasPasteHtml(wrapper.outerHTML);
+  clipboardData.setData("text/html", html);
+  clipboardData.setData("text/plain", selection.toString());
+}
+
+function isCanvasCopyHtml(html = "") {
+  return /data-equation-canvas-copy|<math[\s>]|class=["'][^"']*(?:solution-layout|equation-render)/i.test(String(html));
+}
+
+function shouldRenderCanvasLatex(text = "") {
+  const cleaned = smartCleanMathInput(text);
+  if (!cleaned || cleaned.length < 2) return false;
+  return /\\(?:frac|sqrt|left|right|begin|sum|int|lim|sin|cos|tan|sec|csc|cot)|\$\$|\\\[|[_^{}]/.test(cleaned);
+}
+
+function sanitizeCanvasPasteHtml(html = "") {
+  const template = document.createElement("template");
+  template.innerHTML = String(html);
+  template.content.querySelectorAll("script, style, iframe, object, embed, link, meta").forEach((node) => node.remove());
+  template.content.querySelectorAll("*").forEach((node) => {
+    [...node.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value || "";
+      if (
+        name.startsWith("on") ||
+        name === "srcdoc" ||
+        name === "contenteditable" ||
+        name === "data-visual-edit" ||
+        name === "data-equation-edit-canvas" ||
+        (name === "href" && /^\s*javascript:/i.test(value))
+      ) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  const copied = template.content.querySelector("[data-equation-canvas-copy]");
+  return copied ? copied.innerHTML : template.innerHTML;
+}
+
+function ensureCanvasSelection(editor) {
+  const selection = window.getSelection();
+  if (selection?.rangeCount && isSelectionInsideNode(selection, editor)) return;
+
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  editor.focus({ preventScroll: true });
+}
+
+function insertHtmlAtCanvasSelection(html, editor) {
+  ensureCanvasSelection(editor);
+  if (document.queryCommandSupported?.("insertHTML")) {
+    document.execCommand("insertHTML", false, html);
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const fragment = template.content;
+  const lastNode = fragment.lastChild;
+  range.insertNode(fragment);
+  if (lastNode) placeCaretAfterNode(lastNode, editor);
+}
+
+function insertTextAtCanvasSelection(text, editor) {
+  ensureCanvasSelection(editor);
+  if (document.queryCommandSupported?.("insertText")) {
+    document.execCommand("insertText", false, text);
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  placeCaretAfterNode(node, editor);
+}
+
+function placeCaretAfterNode(node, editor) {
+  const range = document.createRange();
+  range.setStartAfter(node);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  editor.focus({ preventScroll: true });
+}
+
+function isSelectionInsideNode(selection, node) {
+  if (!selection || !selection.rangeCount || !node) return false;
+  const range = selection.getRangeAt(0);
+  return node.contains(range.commonAncestorContainer);
 }
 
 function handleEditorCommand(event) {
@@ -1260,6 +2718,30 @@ function focusPreviewEditor() {
   if (!editor) return null;
   editor.focus({ preventScroll: true });
   return editor;
+}
+
+function handleEquationCanvasClick(event) {
+  if (event.target.closest("[data-visual-edit]")) return;
+  focusPreviewEditor();
+}
+
+function handleEquationCanvasWheel(event) {
+  if (!event.ctrlKey) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const direction = event.deltaY > 0 ? -1 : 1;
+  const step = event.shiftKey ? 2 : 6;
+  const currentZoom = Number.isFinite(Number(state.pageZoom)) ? Number(state.pageZoom) : 100;
+  const nextZoom = clamp(currentZoom + direction * step, 40, 220);
+  if (nextZoom === currentZoom) return;
+
+  state.pageZoom = nextZoom;
+  app.querySelectorAll(".equation-canvas").forEach((canvas) => {
+    canvas.style.setProperty("--page-zoom", String(nextZoom / 100));
+  });
+  saveState(state);
 }
 
 function persistVisualEdit() {
@@ -2715,25 +4197,120 @@ function createCanvasExportSvg() {
   const canvas = app.querySelector(".equation-canvas");
   if (!canvas) return "";
 
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.ceil(rect.width));
-  const height = Math.max(1, Math.ceil(rect.height));
+  const exportClone = createFullCanvasExportClone(canvas);
+  if (!exportClone) return "";
+
+  const { clone, width, height, cleanup } = exportClone;
+  const css = createCanvasExportCss(width, height);
+  const background = escapeHtml(state.background || "#ffffff");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject x="0" y="0" width="${width}" height="${height}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:visible;background:${background};"><style>${css}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+  cleanup();
+  return svg;
+}
+
+function createFullCanvasExportClone(canvas) {
+  const canvasStyle = window.getComputedStyle(canvas);
+  const exportGutter = 18;
   const clone = canvas.cloneNode(true);
+  const baseWidth = Math.max(canvas.offsetWidth || 0, canvas.clientWidth || 0, canvas.scrollWidth || 0, 900);
+  const host = document.createElement("div");
+
+  host.style.position = "fixed";
+  host.style.left = "-100000px";
+  host.style.top = "0";
+  host.style.width = "max-content";
+  host.style.height = "auto";
+  host.style.opacity = "0";
+  host.style.pointerEvents = "none";
+  host.style.zIndex = "-1";
+
   clone.style.transform = "none";
+  clone.style.zoom = "1";
+  clone.style.width = `${baseWidth}px`;
+  clone.style.height = "auto";
+  clone.style.minHeight = "0";
+  clone.style.maxWidth = "none";
+  clone.style.maxHeight = "none";
+  clone.style.display = "block";
+  clone.style.overflow = "visible";
+  clone.style.margin = "0";
+  clone.style.alignItems = "start";
+  clone.style.justifyItems = "start";
+  clone.style.padding = `${readPixelValue(canvasStyle.paddingTop) + exportGutter}px ${readPixelValue(canvasStyle.paddingRight) + exportGutter}px ${readPixelValue(canvasStyle.paddingBottom) + exportGutter}px ${readPixelValue(canvasStyle.paddingLeft) + exportGutter}px`;
   clone.querySelectorAll("[contenteditable]").forEach((node) => {
     node.removeAttribute("contenteditable");
     node.removeAttribute("data-visual-edit");
   });
+  const cloneRender = clone.querySelector(".equation-render");
+  if (cloneRender) {
+    cloneRender.style.display = "block";
+    cloneRender.style.width = "max-content";
+    cloneRender.style.minWidth = "0";
+    cloneRender.style.maxWidth = "none";
+    cloneRender.style.height = "auto";
+    cloneRender.style.minHeight = "0";
+    cloneRender.style.maxHeight = "none";
+    cloneRender.style.overflow = "visible";
+  }
+  clone.querySelectorAll("*").forEach((node) => {
+    node.scrollTop = 0;
+    node.scrollLeft = 0;
+  });
 
-  const css = `
-    .equation-canvas{box-sizing:border-box;width:${width}px;height:${height}px;display:grid;align-items:flex-start;justify-items:flex-start;padding:var(--page-margin,32px);background:#fff;border:1px solid #cfd8e1;color:#050505;font-family:Arial, sans-serif;overflow:hidden;}
-    .equation-render{width:100%;max-width:100%;white-space:normal;line-height:1.2;color:inherit;font-weight:500;}
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  const firstBounds = measureCloneExportBounds(clone);
+  clone.style.width = `${Math.max(baseWidth, Math.ceil(firstBounds.width))}px`;
+
+  const finalBounds = measureCloneExportBounds(clone);
+  const measuredWidth = Math.max(clone.scrollWidth, clone.offsetWidth, Math.ceil(finalBounds.width));
+  const measuredHeight = Math.max(clone.scrollHeight, clone.offsetHeight, Math.ceil(finalBounds.height));
+  const width = Math.max(1, Math.ceil(measuredWidth));
+  const height = Math.max(1, Math.ceil(measuredHeight));
+
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.minHeight = `${height}px`;
+
+  return {
+    clone,
+    width,
+    height,
+    cleanup: () => host.remove(),
+  };
+}
+
+function measureCloneExportBounds(clone) {
+  const cloneBox = clone.getBoundingClientRect();
+  let maxRight = cloneBox.right;
+  let maxBottom = cloneBox.bottom;
+
+  clone.querySelectorAll("*").forEach((node) => {
+    const box = node.getBoundingClientRect();
+    if (!box.width && !box.height && !node.scrollWidth && !node.scrollHeight) return;
+    const scrollRight = box.left + Math.max(node.scrollWidth || 0, node.offsetWidth || 0, box.width || 0);
+    const scrollBottom = box.top + Math.max(node.scrollHeight || 0, node.offsetHeight || 0, box.height || 0);
+    maxRight = Math.max(maxRight, box.right, scrollRight);
+    maxBottom = Math.max(maxBottom, box.bottom, scrollBottom);
+  });
+
+  return {
+    width: Math.max(0, maxRight - cloneBox.left),
+    height: Math.max(0, maxBottom - cloneBox.top),
+  };
+}
+
+function createCanvasExportCss(width, height) {
+  return `
+    .equation-canvas{box-sizing:border-box;width:${width}px;height:${height}px;min-height:${height}px;max-height:none;display:block;align-items:flex-start;justify-items:flex-start;padding:var(--page-margin,32px);background:#fff;border:1px solid #cfd8e1;color:#050505;font-family:Arial, sans-serif;overflow:visible;}
+    .equation-render{display:block;width:max-content;min-width:0;max-width:none;height:auto;min-height:0;overflow:visible;white-space:normal;line-height:1.2;color:inherit;font-weight:500;}
     math{font-family:inherit;}
-    .solution-layout{display:grid;align-content:start;justify-items:start;gap:.42em;width:100%;font-size:1em;line-height:1.32;}
-    .solution-line{width:100%;max-width:100%;}
+    .solution-layout{display:grid;align-content:start;justify-items:start;gap:.42em;width:max-content;max-width:none;font-size:1em;line-height:1.32;}
+    .solution-line{width:max-content;max-width:none;}
     .solution-text{font:inherit;line-height:1.32;}
     .solution-equation{display:flex;align-items:center;min-height:1.45em;line-height:1.15;}
-    .solution-equation-set{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);align-items:center;column-gap:.34em;row-gap:.34em;width:fit-content;max-width:100%;line-height:1.15;}
+    .solution-equation-set{display:grid;grid-template-columns:max-content max-content minmax(max-content,1fr);align-items:center;column-gap:.34em;row-gap:.34em;width:max-content;max-width:none;line-height:1.15;}
     .eq-left{display:inline-flex;justify-content:flex-end;align-items:center;min-width:2.35em;text-align:right;}
     .eq-sign{display:inline-flex;align-items:center;justify-content:center;min-width:.75em;font-family:"Cambria Math","Times New Roman",serif;}
     .eq-right{display:inline-flex;align-items:center;min-width:0;}
@@ -2744,19 +4321,21 @@ function createCanvasExportSvg() {
     mtd{padding:0.08em 0.12em;}
     svg{max-width:100%;height:auto;}
   `;
+}
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+function readPixelValue(value) {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function exportCanvasPng(options = {}) {
   const svg = createCanvasExportSvg();
   if (!svg) return;
 
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+  const url = createSvgImageDataUrl(svg);
   const image = new Image();
   image.onload = () => {
-    const scale = Math.max(2, window.devicePixelRatio || 1);
+    const scale = getCanvasExportScale(image.width, image.height, PNG_EXPORT_QUALITY_SCALE);
     const output = document.createElement("canvas");
     output.width = Math.round(image.width * scale);
     output.height = Math.round(image.height * scale);
@@ -2764,24 +4343,58 @@ function exportCanvasPng(options = {}) {
     context.fillStyle = state.background || "#ffffff";
     context.fillRect(0, 0, output.width, output.height);
     context.drawImage(image, 0, 0, output.width, output.height);
-    URL.revokeObjectURL(url);
 
-    output.toBlob(async (pngBlob) => {
-      if (!pngBlob) return;
-      if (options.copy && navigator.clipboard && window.ClipboardItem) {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
-          return;
-        } catch {
-          downloadBlob(pngBlob, "equation.png");
+    try {
+      output.toBlob(async (pngBlob) => {
+        if (!pngBlob) {
+          downloadCanvasSvgFallback(svg);
           return;
         }
-      }
-      downloadBlob(pngBlob, "equation.png");
-    }, "image/png");
+        if (options.copy && navigator.clipboard && window.ClipboardItem) {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+            return;
+          } catch {
+            downloadBlob(pngBlob, "equation.png");
+            return;
+          }
+        }
+        downloadBlob(pngBlob, "equation.png");
+      }, "image/png");
+    } catch {
+      downloadCanvasSvgFallback(svg);
+    }
   };
-  image.onerror = () => URL.revokeObjectURL(url);
+  image.onerror = () => {
+    downloadCanvasSvgFallback(svg);
+  };
   image.src = url;
+}
+
+function createSvgImageDataUrl(svg) {
+  const bytes = new TextEncoder().encode(svg);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
+function downloadCanvasSvgFallback(svg) {
+  const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  downloadBlob(svgBlob, "equation.svg");
+}
+
+function getCanvasExportScale(width, height, preferredScale = 2) {
+  const preferred = Math.max(preferredScale, window.devicePixelRatio || 1);
+  const maxDimension = 16384;
+  const maxPixels = 90000000;
+  const dimensionScale = Math.min(maxDimension / Math.max(1, width), maxDimension / Math.max(1, height));
+  const pixelScale = Math.sqrt(maxPixels / Math.max(1, width * height));
+  return Math.max(1, Math.min(preferred, dimensionScale, pixelScale));
 }
 
 function downloadBlob(blob, filename) {
@@ -2792,7 +4405,7 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function copyText(value) {
@@ -2812,11 +4425,15 @@ function fitEquationPreview() {
   render.style.fontSize = `${baseSize}px`;
 
   const canvasBox = canvas.getBoundingClientRect();
-  const contentBox = content.getBoundingClientRect();
+  const contentBoxes = [content, ...render.querySelectorAll("math")]
+    .map((node) => node.getBoundingClientRect())
+    .filter((box) => box.width > 0 || box.height > 0);
+  const contentWidth = Math.max(render.scrollWidth, ...contentBoxes.map((box) => box.width));
+  const contentHeight = Math.max(render.scrollHeight, ...contentBoxes.map((box) => box.height));
   const availableWidth = Math.max(120, canvasBox.width - 58);
   const availableHeight = Math.max(80, canvasBox.height - 46);
-  const widthScale = contentBox.width > 0 ? availableWidth / contentBox.width : 1;
-  const heightScale = contentBox.height > 0 ? availableHeight / contentBox.height : 1;
+  const widthScale = contentWidth > 0 ? availableWidth / contentWidth : 1;
+  const heightScale = contentHeight > 0 ? availableHeight / contentHeight : 1;
   const scale = Math.min(1, widthScale, heightScale);
 
   if (scale < 1) {
