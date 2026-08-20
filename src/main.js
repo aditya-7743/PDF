@@ -5179,18 +5179,23 @@ function handlePptAction(action, target) {
       break;
     }
     case "ppt-apply-slide-to-all": {
-      if (activeQ && activeQ.settings && Object.keys(activeQ.settings).length > 0) {
+      if (activeQ) {
         recordUndo();
-        ppt.settings = { ...ppt.settings, ...activeQ.settings };
-        delete activeQ.settings;
+        const currentEffective = getSlideSettings(ppt.settings, activeQ);
+        ppt.settings = { ...currentEffective };
+        ppt.questions.forEach((q) => {
+          delete q.settings;
+        });
+        ppt.applyScope = "all";
         render();
       }
       break;
     }
     case "ppt-reset-slide-override": {
-      if (activeQ && activeQ.settings) {
+      if (activeQ) {
         recordUndo();
         delete activeQ.settings;
+        ppt.applyScope = "all";
         render();
       }
       break;
@@ -5641,6 +5646,10 @@ function handlePptSettingInput(e) {
     activeQ.settings[key] = val;
   } else {
     state.ppt.settings[key] = val;
+    if (activeQ && activeQ.settings && key in activeQ.settings) {
+      delete activeQ.settings[key];
+      if (Object.keys(activeQ.settings).length === 0) delete activeQ.settings;
+    }
   }
   
   // If topic changed in settings, update active topic display
@@ -5772,8 +5781,14 @@ function initCanvasResizeHandles() {
           activeQ.settings[key] = value;
         } else {
           state.ppt.settings[key] = value;
+          if (activeQ && activeQ.settings && key in activeQ.settings) {
+            delete activeQ.settings[key];
+            if (Object.keys(activeQ.settings).length === 0) delete activeQ.settings;
+          }
         }
-      }      function onMouseMove(moveEvent) {
+      }
+
+      function onMouseMove(moveEvent) {
         const deltaX = moveEvent.clientX - startX;
         const deltaY = moveEvent.clientY - startY;
         const deltaPercent = (deltaX / wrapperRect.width) * 100;

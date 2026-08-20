@@ -40,6 +40,13 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-20 - "Apply to All Slides" Global Propagation Fix
+
+- **Instant Full Deck Propagation**:
+  - Clicking **`🚀 Apply to All`** (in Toolbar or Customizer) now calculates the active slide's complete computed styles (positions, widths, paddings, fonts, colors, divider, options layout) and sets it as the Master settings.
+  - Clears all per-slide override dictionaries across all slides in `ppt.questions`, guaranteeing 100% uniformity across all slides in the deck.
+  - In Master mode (`applyScope = "all"`), per-property updates automatically purge matching slide-specific overrides so canvas dragging or slider changes take effect immediately across all slides.
+
 ### 2026-08-20 - Multi-Image Per Slide (2-3+ Diagrams) & Slide Navigation Fixes
 
 - **Multiple Images Per Slide**:

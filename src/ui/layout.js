@@ -904,14 +904,13 @@ function renderPptEditorToolbar(settings = {}, activeQ = {}, applyScope = "all",
   return `
     <header class="ppt-panel-header ppt-editor-toolbar" role="toolbar" aria-label="PPT Formatting & LaTeX Toolbar">
       <!-- Target Scope: All Slides vs Current Slide Only -->
-      <div class="ppt-tb-group ppt-tb-scope-group">
+      <div class="ppt-tb-group ppt-tb-scope-group" style="display:flex; align-items:center; gap:2px;">
         <span style="font-size:10px; font-weight:800; color:#8b949e;">Apply:</span>
         <button class="ppt-tb-btn ppt-tb-scope-btn ${applyScope === 'all' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="all" title="Changes (Position, Width, Layout, Font) apply to ALL slides (Global Master)">🌐 All Slides</button>
         <button class="ppt-tb-btn ppt-tb-scope-btn ${applyScope === 'current' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="current" title="Changes apply ONLY to this slide (Q.${activeIdx + 1}) without affecting other slides">🎯 Slide ${activeIdx + 1} Only</button>
+        <button class="ppt-tb-btn" data-action="ppt-apply-slide-to-all" title="Copy this slide's complete layout, positions, fonts, colors, and settings to ALL slides" style="color:#58a6ff; font-size:10px; font-weight:bold; cursor:pointer;">🚀 Apply to All</button>
         ${hasOverrides ? `
-          <span class="ppt-slide-override-badge" title="This slide has custom per-slide tweaks">🎯 Custom</span>
-          <button class="ppt-tb-btn" data-action="ppt-apply-slide-to-all" title="Copy this slide's custom layout to ALL slides" style="color:#58a6ff; font-size:10px; font-weight:700;">🚀 Push to All</button>
-          <button class="ppt-tb-btn" data-action="ppt-reset-slide-override" title="Revert this slide back to global defaults" style="color:#f85149; font-size:10px;">🔄 Reset</button>
+          <button class="ppt-tb-btn" data-action="ppt-reset-slide-override" title="Revert this slide back to global master defaults" style="color:#f85149; font-size:10px; cursor:pointer;">🔄 Reset</button>
         ` : ''}
       </div>
 
@@ -1052,15 +1051,15 @@ function renderPptBuilderWorkbench(state) {
               <button class="ppt-layout-btn ${applyScope === 'all' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="all" title="Changes apply as default to ALL slides">🌐 All Slides (Master)</button>
               <button class="ppt-layout-btn ${applyScope === 'current' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="current" title="Changes apply ONLY to this slide (Q.${activeIdx + 1})">🎯 Slide ${activeIdx + 1} Only</button>
             </div>
-            <div style="font-size:10px; color:#8b949e; line-height:1.3;">
-              ${applyScope === 'current' ? `⚡ <b>Slide ${activeIdx + 1} Fine-Tuning:</b> Custom adjustments will NOT affect previous or next slides.` : '🌍 <b>Global Master Mode:</b> Adjustments apply to all slides.'}
+            <div style="font-size:10px; color:#8b949e; line-height:1.3; margin-bottom:8px;">
+              ${applyScope === 'current' ? `⚡ <b>Slide ${activeIdx + 1} Fine-Tuning:</b> Custom adjustments apply only here.` : '🌍 <b>Global Master Mode:</b> Adjustments apply to all slides.'}
             </div>
-            ${hasOverrides ? `
-              <div style="margin-top:6px; display:flex; gap:4px;">
-                <button class="ppt-btn" data-action="ppt-apply-slide-to-all" style="flex:1; font-size:10px; color:#58a6ff;" title="Copy this slide's custom layout to ALL other slides">🚀 Push to All</button>
-                <button class="ppt-btn" data-action="ppt-reset-slide-override" style="font-size:10px; color:#f85149;" title="Revert this slide back to global defaults">🔄 Reset Slide</button>
-              </div>
-            ` : ''}
+            <div style="display:flex; gap:4px;">
+              <button class="ppt-btn" data-action="ppt-apply-slide-to-all" style="flex:1; font-size:11px; font-weight:bold; color:#58a6ff; background:rgba(88,166,255,0.1); border-color:#58a6ff; cursor:pointer;" title="Copy this slide's complete layout, positions, fonts, colors, and settings to ALL slides">🚀 Apply Style to All Slides</button>
+              ${hasOverrides ? `
+                <button class="ppt-btn" data-action="ppt-reset-slide-override" style="font-size:11px; color:#f85149; cursor:pointer;" title="Revert this slide back to global master defaults">🔄 Reset</button>
+              ` : ''}
+            </div>
           </div>
 
           <!-- DOCX Upload Dropzone -->
