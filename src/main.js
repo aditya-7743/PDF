@@ -39,6 +39,10 @@ let imagePdfCancelRequested = false;
 let imageResizeItems = [];
 let imageResizeSelectedId = "";
 let imageResizePreviewDrawToken = 0;
+let lastFocusedPptInput = null;
+let lastFocusedPptCanvasTarget = null;
+let lastActiveFormattingTarget = "english";
+let pptInputUndoTimer = null;
 
 document.addEventListener("paste", handleGlobalPaste);
 document.addEventListener("keydown", handleImagePdfLightboxKeydown);
@@ -4844,10 +4848,6 @@ function bindPptEvents() {
   updateToolbarDisplay();
 }
 
-let lastFocusedPptInput = null;
-let lastFocusedPptCanvasTarget = null;
-let lastActiveFormattingTarget = "english";
-
 function getActiveFormattingTarget() {
   // 1. Check selected canvas bounding box
   const selectedBox = app.querySelector(".ppt-slide-canvas-wrapper .canva-transform-box.is-selected");
@@ -5586,8 +5586,6 @@ async function processUploadedPptFile(file) {
     alert("Error parsing file: " + err.message);
   }
 }
-
-let pptInputUndoTimer = null;
 
 function handlePptQuestionFieldInput(e) {
   ensurePptState();
