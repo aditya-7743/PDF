@@ -40,6 +40,162 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-20 - Multi-Image Per Slide (2-3+ Diagrams) & Slide Navigation Fixes
+
+- **Multiple Images Per Slide**:
+  - You can now add **2, 3, or more diagrams/graphs/images** onto a single slide!
+  - Use `Ctrl + V` (paste) or `[ + Add Image ]` or `[ 📁 Browse ]` to add as many images as you need.
+  - Each image gets its own independent Canva transform box (`✥ Diagram 1`, `✥ Diagram 2`, etc.), independent drag position, independent dimensions, and individual `✕` / `🗑️` delete button.
+  - Synchronized in full quality across Canva canvas, Live Preview, PDF exports, and PPTX exports.
+- **Fixed Slide Navigation & Functions**:
+  - Added dedicated **`+ New Slide`** button right next to `◀ Prev` / `Next ▶` in the top toolbar for 1-click slide addition.
+  - Fixed slide index boundary validations and active focus retention so clicking slide navigation buttons always switches slides instantly without getting stuck.
+
+### 2026-08-20 - Divider Line Move & Width Stretch Free-Transform Fix
+
+- **2D Freeform Move (X & Y)**:
+  - Enabled full vertical (`dividerPosY`) and horizontal (`dividerPosX`) drag repositioning on the **`✥ Divider`** pill.
+- **Canva Stretch Handles & Live Sync**:
+  - Attached Canva transform box and edge stretch handles directly to `.slide-divider-wrapper` with live CSS translation and width scaling.
+  - Divider adjustments synchronize perfectly across canvas, live preview, PDF exports, and PPTX exports.
+
+### 2026-08-20 - Previous / Next Slide Quick Navigation Icons in Top Toolbar
+
+- **Toolbar Slide Navigation Group**:
+  - Added dedicated **`◀ Prev`** and **`Next ▶`** navigation icon buttons with a live **`Slide X / Y`** counter directly in the Top Toolbar (right next to `[ 🖼️ Add Image ]`).
+  - Allows 1-click switching between slides without having to scroll down to the slide tab strip.
+- **Keyboard Shortcuts**:
+  - `PageUp` / `Alt + ←` to go to Previous Slide.
+  - `PageDown` / `Alt + →` to go to Next Slide.
+
+### 2026-08-20 - Direct Whole-Box Dragging & 1-Click Diagram Removal Fix
+
+- **Direct Whole-Box Dragging**:
+  - You can now click and drag **anywhere directly inside the diagram box or image** to move it smoothly across the slide (like in PowerPoint/Canva), in addition to using the `✥ Diagram / Graph` pill.
+  - Image drag handles scale smoothly without leaving blank letterboxes or distortions (`object-fit: contain`).
+- **1-Click Diagram Removal**:
+  - Clicking the red **`✕`** on the canvas or **`🗑️ Remove`** in the middle editor immediately and cleanly removes the diagram from the slide.
+
+### 2026-08-20 - Made Diagram an Independent Absolute Floating Layer (Zero Text/Option Displacement)
+
+- **Independent Absolute Layer**:
+  - Moved `.slide-image-container` to `position: absolute;` on its own dedicated canvas floating layer.
+  - Adding, resizing, or moving a diagram now has **ZERO effect** on English text, Hindi text, Exam Tag, or Options Grid — all other elements and fonts **stay 100% frozen in their exact positions**!
+
+### 2026-08-20 - Removed Restrictive Clamping on Options & Question Drag Positions
+
+- **100% Unconstrained Freeform Drag**:
+  - Removed artificial vertical clamping limits (previously restricted to `+60px` max down) on `optionsPosY`, `engPosY`, `hindiPosY`, `examTagPosY`, and `topicPosY`.
+  - You can now drag the **Options Grid** all the way to the very bottom, footer, or anywhere on the slide without it getting stuck!
+
+### 2026-08-20 - Slide Diagram / Graph / Image Paste & Canva 8-Point Free-Transform
+
+- **Instant Clipboard Image Paste (`Ctrl + V`)**:
+  - Simply copy any math diagram, geometry figure, pie chart, or take a screenshot with **`Win + Shift + S`**, and press **`Ctrl + V`** anywhere on the slide canvas or editor to attach it instantly to the active question slide.
+- **Dedicated Diagram / Graph Card & Toolbar Button**:
+  - Added **`🖼️ Add Image`** button in the Top Toolbar and a dedicated **`🖼️ Diagram / Graph (Optional)`** card in the Middle Content Editor with `📁 Browse Diagram Image` and `📋 Paste Image` buttons.
+- **Canva 8-Point Free-form Bounding Box**:
+  - The pasted diagram gets a live interactive bounding box (`✥ Diagram / Graph`) with 8 handles (`nw`, `ne`, `se`, `sw`, `n`, `s`, `e`, `w`) for scaling, width stretching, and drag repositioning anywhere on the slide.
+  - Delete button (`✕` / `🗑️ Remove`) to clear the diagram anytime.
+- **Export Parity (PDF & PPTX)**:
+  - Slide diagrams render seamlessly in both PDF canvas exports and native PowerPoint `.pptx` presentations!
+
+### 2026-08-20 - Context-Aware Formatting Toolbar (Smart Target Detection)
+
+- **Smart Target Detection & Formatting**:
+  - Clicking / selecting any element (e.g. **Options A/B/C/D**, **Hindi Question**, **English Question**, **Topic Name**, **Exam Tag**) dynamically shifts toolbar focus to that specific element.
+  - Clicking **`+` / `−`** (Font Size) or adjusting the font dropdown / text color now precisely modifies the **active target's styling** (e.g. `optionFontSize`, `optionFontFamily`, `optionTextColor` when focused on Options).
+  - The toolbar font size badge dynamically shows target context: `Font Size (Options: 18px)`, `Font Size (English: 19px)`, `Font Size (Hindi: 18px)`, etc.
+- **Left Panel Option Font Size Slider**:
+  - Added dedicated `Option Font Size (px)` slider in the Left Panel Customizer under **Option Cards & Layout** for full manual control.
+
+### 2026-08-20 - Fixed Scroll Position Jumping & Active Slide Tab Auto-Centering
+
+- **Persistent Panel Scroll Positions**:
+  - Automatically snapshots and restores the exact vertical and horizontal scroll positions of the Left Customizer Panel (`.ppt-tools-panel`), Middle Content Editor (`.ppt-editor-body`), and Slide Tabs strip across renders.
+  - When editing Option inputs or question fields at the bottom of the editor, the view **stays locked at that exact spot** instead of jumping back up to the top!
+- **Active Slide Tab Auto-Centering**:
+  - Selecting any slide (e.g. `Q.5`, `Q.12`, `Q.25`) automatically scrolls the horizontal slide tab bar to keep that active slide in view, rather than snapping back to `Q.1`.
+- **Input Focus & Caret Retention**:
+  - Preserves input focus and cursor position during live edits.
+
+### 2026-08-20 - Added "Apply Changes Scope: 🌐 All Slides (Master) vs 🎯 Slide Only" Feature
+
+- **Visible Scope Control (Top Toolbar & Left Customizer Panel)**:
+  - **`🌐 All Slides (Master)`**: Changes made to colors, fonts, widths, and drag positions apply across all slides as the global default.
+  - **`🎯 Slide [X] Only`**: Fine-tune an individual question (e.g. adjust width for a longer Hindi question or reposition elements for a specific math diagram) **without disturbing or shifting any previous or next slides**.
+- **`🚀 Push to All` & `🔄 Reset Slide` Buttons**:
+  - When a slide has custom adjustments, a **`🎯 Custom`** badge appears along with a **`🚀 Push to All`** button (to copy this slide's custom layout to all other slides with 1 click) and a **`🔄 Reset Slide`** button (to revert back to master defaults).
+- **Full Exporter Parity**:
+  - Both PDF Exporter (`pdfExporter.js`) and PPTX Exporter (`pptxExporter.js`) now use `getSlideSettings(globalSettings, q)` so all slide-specific customizations are rendered and exported with 100% pixel fidelity.
+
+### 2026-08-19 - Added Canva/PowerPoint 8-Point Bounding Box, Clean Single-Row Tabs, Topic Positioning, & Divider Transform
+
+- **Canva/PowerPoint 8-Point Free-Transform Bounding Box**:
+  - Replaced legacy handles with standard 8-point bounding boxes: 4 round corner circle handles (`nw`, `ne`, `se`, `sw`) and 4 side pill handles (`n`, `s`, `e`, `w`) with crisp purple outline `#8b5cf6`.
+  - Floating top drag pill (`✥ English`, `✥ Hindi`, `✥ Topic`, `✥ Divider`, `✥ Exam Tag`, `✥ Options Grid`) allows 100% effortless, rock-solid dragging anywhere without losing hover state.
+  - Clicking any element gives it persistent `is-selected` state.
+- **Single-Row Horizontal Slide Selector Tabs**:
+  - Restored clean, single horizontal line scrolling tabs (`Q.1, Q.2, ... Q.25`) with `flex-wrap: nowrap; overflow-x: auto;` in the middle editor.
+- **Topic Title Drag & Positioning**:
+  - Added Topic title positioning (`topicPosX`, `topicPosY`, `topicFontSize`) with direct on-canvas drag pill (`✥ Topic`), corner scaling handles, and left panel inputs.
+- **Divider Line Free Transform & Width**:
+  - Added adjustable width (`dividerWidth` from `10%` to `100%`), position (`dividerPosX`), edge stretch handles (`↔`), and 1-click `Match Eng` button to align divider width with English text.
+- **Full PDF and PPTX Exporter Parity**:
+  - All Topic offsets, Divider widths/positions, and 8-point transformed elements faithfully exported.
+
+### 2026-08-19 - Added Independent Drag Handles for Each Element & SSC GD YouTube Slide Layout
+
+- **Separate Drag Handles (`✥`) for Every Element**: Added individual move handles directly on the canvas for:
+  1. **English Question (`✥ Eng`)**: Drag to move English question horizontally (X%) and vertically (Y px) independently.
+  2. **Hindi Question (`✥ Hindi`)**: Drag to move Hindi question horizontally (X%) and vertically (Y px) independently.
+  3. **Exam Tag Badge (`✥ Exam`)**: Drag to move Exam Tag anywhere independently.
+  4. **Options Grid (`✥ Opt`)**: Drag to move Option Cards / Clean options grid anywhere independently.
+  5. **Whole Slide Body (`✥ All`)**: Move entire question content container together if preferred.
+- **Standalone Exam Tag Placement & Badges**: Added support for Exam Tag placement:
+  - `Below Hindi Question (🎯 SSC GD / YouTube Style)`: Renders as a dedicated pill badge (e.g. `(SSC GD 22 Feb., 2024 Shift III)` in red pill) right below Hindi question.
+  - `Top Header (📌)`: Displays inside top header bar.
+  - `None (❌)`: Hides the tag from slide.
+  - Badge styles: `🔴 Red Pill`, `🟡 Yellow Box Highlight`, `📝 Plain Text`.
+- **Customizer Position Inputs & 1-Click Reset**: Added numerical inputs in the customizer for `engPosX`, `engPosY`, `hindiPosX`, `hindiPosY`, `examTagPosX`, `examTagPosY`, `optionsPosX`, `optionsPosY`, plus a `🔄 Reset` button to return all positions to default `0, 0`.
+- **Seamless Multi-Format Exporter Sync**: Updated PDF Exporter (`renderSlideToCanvas`) and PPTX Exporter (`exportQuestionsToPptx`) to faithfully export custom element coordinates and standalone exam pill badges.
+
+### 2026-08-19 - Added On-Slide Direct Editing (WYSIWYG) & Custom Boundary Controls
+
+- **Direct In-Place Editing**: Every text element on the slide preview canvas (Q.No, Exam tag, Topic, English question, Hindi question, Option cards A/B/C/D, and Footer) is directly editable on the slide with live bidirectional sync to the middle editor and Undo (`Ctrl+Z`) history.
+- **Linked Word & LaTeX Toolbar**: Formatting buttons (Bold, Italic, Underline, Text/Highlight Color, LaTeX snippets, Math symbols, Alignment, Lists, and Clean) apply directly to selected text on the canvas and input areas.
+- **Custom Question Boundaries**: Added controls for Question Box Width %, Padding, Divider Margin/Spacing, and Line Height.
+- **Custom Option Boundaries & Layouts**: Added 3 layout modes (`2 × 2 Grid`, `1 Column Stacked`, `4 Columns Horizontal`), Container Width %, Card Padding / Height, Card Gap, Border Thickness, and Corner Radius with seamless PDF and PPTX export support.
+
+### 2026-08-19 - Fixed English Question Swapping with Exam Tag
+
+- Fixed `isExamTagLine` in `src/core/docxParser.js` to enforce strict word boundaries `\b` around exam acronyms (e.g. `\bPO\b`), preventing questions with words like `compound` (which contains `po`) from mistakenly being parsed as exam tags.
+- Added heuristic filtering to ensure lines with question patterns (e.g. `In how many...`, `?`, `।`) are strictly treated as question bodies and never as exam tags.
+
+### 2026-08-19 - Added Global Undo/Redo & Ctrl+Z Shortcut in PPT Builder
+
+- Added global keydown listener for `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo).
+- Added Undo (`↶`) and Redo (`↷`) buttons to the PPT Formatting Toolbar.
+- Wired `recordUndo()` across all PPT Builder operations (slide additions, deletions, duplicates, theme presets, text inputs, LaTeX insertions, formatting changes, and setting adjustments).
+
+### 2026-08-19 - Fixed Question Splitting & Ratio Option Collision (DOCX/Paste Parser)
+
+- Fixed `qRegex` to support `Q.No: 1` through `Q.No: 25`, ensuring all 25 questions in a document/paste are cleanly split into individual slides instead of collapsing into a single slide.
+- Fixed `optRegex` collision where math ratios like `A: B = 7:5` and `C: D = 4:5` in the question text were mistakenly captured as options.
+- Added smart stripping of `Answer : A` appended to the last option.
+- Improved bilingual separation to preserve English and Hindi question lines independently.
+
+### 2026-08-19 - Fixed Live Toggle for Divider Line and Footer Bar
+
+- Fixed slide canvas DOM structure so `.slide-divider` and `.slide-footer-bar` remain persistently available in the DOM with inline display toggles.
+- Added live update handler in `updateLiveCanvasSlide()` for footer background, text, height, font size, and visibility.
+- Fixed PDF and PPTX exporter conditions to ensure divider and footer export seamlessly.
+
+### 2026-08-19 - Removed Bottom Status Bar
+
+- Removed the bottom status bar strip (`Paste input and edit visible output directly...`) across all modes including PPT/PDF Builder.
+- Adjusted app-shell layout grid to let the main workspace fill the full available height.
+
 ### 2026-07-05 - Added Image Tools Button
 
 - Added a third top mode button named Image Tools beside Equation Editor and Math Figures.

@@ -2,12 +2,12 @@ export function normalizeMathInput(input = "") {
   return cleanMathLine(input)
     .replace(/\n+/g, " ")
     .replace(/\s+/g, " ")
-    .replace(/(^|[^\\A-Za-z])(sin|cos|tan|cot|sec|csc|log|ln|lim|max|min|det)(?=\s|\(|\{|\^|_|[A-Za-z0-9])/g, "$1\\$2")
+    .replace(/(^|[^\\A-Za-z])(sin|cos|tan|cot|sec|csc|log|ln|lim|max|min|det)(?=\s|\(|\{|\^|_|[0-9])/g, "$1\\$2")
     .trim();
 }
 
 export function smartCleanMathInput(input = "") {
-  return String(input)
+  return preprocessCopiedChatLines(String(input))
     .replace(/\r/g, "")
     .split("\n")
     .map((line) => cleanPastedLine(line))
@@ -84,11 +84,63 @@ function cleanMathLine(input = "") {
 }
 
 function cleanPastedLine(line = "") {
+  if (shouldDropCopiedChatLine(line)) return null;
   const cleaned = normalizeMathInput(line);
   if (/^(?:\[|\]|\\\[|\\\]|\\begin\{equation\*?\}|\\end\{equation\*?\})$/.test(cleaned.trim())) {
     return null;
   }
   return cleaned;
+}
+
+function preprocessCopiedChatLines(input = "") {
+  const lines = String(input)
+    .replace(/\u00A0/g, " ")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => normalizeCopiedChatLine(line));
+
+  const start = findUsefulCopiedChatStart(lines);
+  return lines.slice(start).join("\n");
+}
+
+function normalizeCopiedChatLine(line = "") {
+  return String(line)
+    .replace(/^\s*#{1,6}\s+/, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*\*/g, "")
+    .replace(/^\s*(?:[-*]|[oO]|•)\s+/, "• ")
+    .replace(/\\+(first|second|third|fourth|part|since|now|convert|multiply|subtract|answer|fraction|decimal)\b/gi, "$1")
+    .trimEnd();
+}
+
+function findUsefulCopiedChatStart(lines = []) {
+  const firstExpressionHeading = lines.findIndex((line) => /^(?:the\s+)?expression:?$/i.test(line.trim()));
+  if (firstExpressionHeading >= 0) return firstExpressionHeading;
+
+  const firstSolutionHeading = lines.findIndex((line) => /^(?:step[-\s]*by[-\s]*step\s+solution|solution|step\s*1\b)/i.test(line.trim()));
+  if (firstSolutionHeading >= 0) return firstSolutionHeading;
+
+  const firstMathLine = lines.findIndex((line) => looksLikeUsefulMathLine(line));
+  return firstMathLine >= 0 ? firstMathLine : 0;
+}
+
+function shouldDropCopiedChatLine(line = "") {
+  const value = String(line).trim();
+  if (!value) return false;
+  if (/^(?:-{3,}|_{3,}|\*{3,})$/.test(value)) return true;
+  if (/^```(?:latex|tex|math)?$/i.test(value)) return true;
+  if (/^here\s+is\b/i.test(value)) return true;
+  if (/^clearly\b/i.test(value)) return true;
+  if (/^rewritten\s+clearly\b/i.test(value)) return true;
+  if (/^from\s+the\s+(?:image|file|screenshot)\b/i.test(value)) return true;
+  if (/^(?:the\s+)?expression:?$/i.test(value)) return true;
+  return false;
+}
+
+function looksLikeUsefulMathLine(line = "") {
+  const value = String(line).trim();
+  if (!value) return false;
+  return /\\(?:frac|sqrt|left|right|begin|sum|int|lim)|\$\$|\\\[|=|\?/.test(value);
 }
 
 function normalizeUnicodeMath(source) {

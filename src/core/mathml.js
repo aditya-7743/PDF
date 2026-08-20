@@ -1,4 +1,4 @@
-import { normalizeMathInput } from "./normalizer.js";
+import { normalizeMathInput } from "./normalizer.js?v=gemini-paste-clean-20260705";
 
 export function renderMathMl(input = "") {
   const normalizedLines = normalizeMathInputLines(input);

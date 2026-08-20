@@ -28,6 +28,12 @@ export function createDefaultState() {
     labelPosition: "top",
     manualAlignment: "center",
     columns: normalizeColumnSizes(branches.app.defaultColumns),
+    ppt: {
+      settings: { ...(branches.ppt?.settings || {}) },
+      questions: [...(branches.ppt?.samples || [])],
+      activeQuestionIndex: 0,
+      zoom: 100,
+    },
   };
 }
 

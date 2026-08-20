@@ -1,9 +1,13 @@
+import { parseDocxFile, parseQuestionsText } from "./core/docxParser.js";
+import { exportQuestionsToPptx } from "./core/pptxExporter.js";
+import { exportQuestionsToPdf } from "./core/pdfExporter.js";
+import { defaultPptSettings, pptThemes, sampleQuestions, getSlideSettings } from "./branches/pptBranch.js";
 import { branches } from "./branches/index.js";
 import { renderMathMl } from "./core/mathml.js?v=gemini-paste-clean-20260705";
 import { autoFixEquationInput, getEquationDiagnostics, smartCleanMathInput } from "./core/normalizer.js?v=gemini-paste-clean-20260705";
 import { createDefaultState, loadState, normalizeColumnSizes, saveState } from "./core/store.js?v=full-paste-fix-20260629";
 import { createImagePdfBlob } from "./core/imagePdf.js?v=clean-topbar-20260705";
-import { renderApp } from "./ui/layout.js?v=image-select-fix-20260706";
+import { renderApp } from "./ui/layout.js?v=image-resize-no-percent-20260706";
 
 const app = document.getElementById("app");
 const HISTORY_LIMIT = 80;
@@ -36,8 +40,159 @@ let imageResizeItems = [];
 let imageResizeSelectedId = "";
 let imageResizePreviewDrawToken = 0;
 
-document.addEventListener("paste", handleImagePdfPaste);
+document.addEventListener("paste", handleGlobalPaste);
 document.addEventListener("keydown", handleImagePdfLightboxKeydown);
+document.addEventListener("keydown", handleGlobalUndoRedoKeydown);
+document.addEventListener("keydown", handlePptSlideNavKeydown);
+
+function handlePptSlideNavKeydown(event) {
+  if (normalizeAppMode(state.mode) !== "ppt-builder") return;
+  const isEditingText = document.activeElement && (
+    document.activeElement.tagName === "INPUT" ||
+    document.activeElement.tagName === "TEXTAREA" ||
+    document.activeElement.isContentEditable
+  );
+  if (isEditingText && (event.key === "ArrowLeft" || event.key === "ArrowRight")) return;
+
+  if (event.key === "PageUp" || (event.altKey && event.key === "ArrowLeft")) {
+    event.preventDefault();
+    handlePptAction("ppt-prev-slide", null);
+  } else if (event.key === "PageDown" || (event.altKey && event.key === "ArrowRight")) {
+    event.preventDefault();
+    handlePptAction("ppt-next-slide", null);
+  }
+}
+
+function handleGlobalPaste(event) {
+  const mode = normalizeAppMode(state.mode);
+  if (mode === "image-tools") {
+    handleImagePdfPaste(event);
+    return;
+  }
+  if (mode === "ppt-builder") {
+    handlePptImagePaste(event);
+    return;
+  }
+}
+
+function handlePptImagePaste(event) {
+  if (normalizeAppMode(state.mode) !== "ppt-builder") return;
+  ensurePptState();
+
+  const files = extractImagePdfClipboardFiles(event.clipboardData);
+  if (!files || !files.length) return; // If text only, allow normal text paste
+
+  event.preventDefault();
+  const file = files[0];
+  const reader = new FileReader();
+  reader.onload = (loadEvt) => {
+    const dataUrl = loadEvt.target.result;
+    attachImageToActiveSlide(dataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function pastePptImageFromClipboard() {
+  ensurePptState();
+  if (!navigator.clipboard?.read) {
+    alert("Please press Ctrl+V directly on the slide to paste your copied image.");
+    return;
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find((t) => t.startsWith("image/"));
+      if (imageType) {
+        const blob = await item.getType(imageType);
+        const reader = new FileReader();
+        reader.onload = (loadEvt) => {
+          attachImageToActiveSlide(loadEvt.target.result);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+    alert("No image found in clipboard. Copy a diagram or screenshot first, then paste.");
+  } catch (err) {
+    alert("Could not access clipboard directly. Please press Ctrl+V directly on the slide to paste!");
+  }
+}
+
+export function getQuestionImages(q) {
+  if (!q) return [];
+  if (Array.isArray(q.images) && q.images.length > 0) return q.images;
+  if (q.image) {
+    const imgObj = typeof q.image === "object" ? q.image : { id: "img_legacy", dataUrl: q.image, posX: 0, posY: 0, width: 260, height: 200 };
+    if (!imgObj.id) imgObj.id = "img_legacy";
+    return [imgObj];
+  }
+  return [];
+}
+
+function attachImageToActiveSlide(dataUrl) {
+  ensurePptState();
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  if (!activeQ) return;
+  recordUndo();
+
+  if (!Array.isArray(activeQ.images)) {
+    activeQ.images = getQuestionImages(activeQ);
+  }
+  delete activeQ.image;
+
+  const newId = `img_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const count = activeQ.images.length;
+  const initialOffsetX = (count % 4) * 45;
+  const initialOffsetY = (count % 4) * 35;
+
+  const img = new Image();
+  img.onload = () => {
+    const aspect = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : 1.33;
+    const defaultW = Math.min(300, Math.max(160, img.naturalWidth || 260));
+    const defaultH = Math.round(defaultW / aspect);
+
+    activeQ.images.push({
+      id: newId,
+      dataUrl,
+      posX: initialOffsetX,
+      posY: initialOffsetY,
+      width: defaultW,
+      height: defaultH,
+      aspectRatio: aspect
+    });
+    render();
+  };
+  img.onerror = () => {
+    activeQ.images.push({
+      id: newId,
+      dataUrl,
+      posX: initialOffsetX,
+      posY: initialOffsetY,
+      width: 260,
+      height: 200
+    });
+    render();
+  };
+  img.src = dataUrl;
+}
+
+function handleGlobalUndoRedoKeydown(event) {
+  const isCtrl = event.ctrlKey || event.metaKey;
+  if (!isCtrl) return;
+
+  const key = event.key.toLowerCase();
+  if (key === "z") {
+    event.preventDefault();
+    if (event.shiftKey) {
+      redoState();
+    } else {
+      undoState();
+    }
+  } else if (key === "y") {
+    event.preventDefault();
+    redoState();
+  }
+}
 
 render();
 
@@ -49,14 +204,88 @@ function render() {
   } else if (String(state.visualOverride || "").includes("drawing-workspace")) {
     state.visualOverride = "";
   }
+
+  // 1. Snapshot scroll positions for all panels before re-render
+  const scrollSnapshot = [];
+  const scrollableElements = app.querySelectorAll(
+    ".ppt-panel-body, .ppt-editor-body, .ppt-slide-tabs-bar, .ppt-q-nav-list, .ppt-preview-stage, .ppt-tools-panel, .ppt-editor-panel, .workbench, .panel-body, .preview-stage, .sidebar-body"
+  );
+  scrollableElements.forEach((el) => {
+    let selector = null;
+    if (el.classList.contains("ppt-tools-panel") || el.closest(".ppt-tools-panel")) {
+      if (el.classList.contains("ppt-panel-body")) selector = ".ppt-tools-panel .ppt-panel-body";
+    } else if (el.classList.contains("ppt-editor-panel") || el.closest(".ppt-editor-panel")) {
+      if (el.classList.contains("ppt-editor-body")) selector = ".ppt-editor-panel .ppt-editor-body";
+      if (el.classList.contains("ppt-slide-tabs-bar")) selector = ".ppt-editor-panel .ppt-slide-tabs-bar";
+    } else if (el.classList.contains("ppt-preview-stage")) {
+      selector = ".ppt-preview-stage";
+    } else if (el.classList.contains("ppt-slide-tabs-bar")) {
+      selector = ".ppt-slide-tabs-bar";
+    } else if (el.classList.contains("ppt-editor-body")) {
+      selector = ".ppt-editor-body";
+    } else if (el.classList.contains("ppt-panel-body")) {
+      selector = ".ppt-panel-body";
+    }
+
+    if (selector && (el.scrollTop > 0 || el.scrollLeft > 0)) {
+      scrollSnapshot.push({ selector, top: el.scrollTop, left: el.scrollLeft });
+    }
+  });
+
+  // Snapshot active focused element
+  const activeElement = document.activeElement;
+  let activeFieldInfo = null;
+  if (activeElement && activeElement !== document.body && app.contains(activeElement)) {
+    if (activeElement.dataset.pptQField) {
+      activeFieldInfo = { selector: `[data-ppt-q-field="${activeElement.dataset.pptQField}"]` };
+    } else if (activeElement.dataset.pptOptionIndex !== undefined) {
+      activeFieldInfo = { selector: `[data-ppt-option-index="${activeElement.dataset.pptOptionIndex}"]` };
+    } else if (activeElement.dataset.pptSetting) {
+      activeFieldInfo = { selector: `[data-ppt-setting="${activeElement.dataset.pptSetting}"]` };
+    }
+    if (activeFieldInfo && activeElement.selectionStart !== undefined) {
+      activeFieldInfo.start = activeElement.selectionStart;
+      activeFieldInfo.end = activeElement.selectionEnd;
+    }
+  }
+
   app.innerHTML = renderApp(state);
   bindEvents();
+
+  // 2. Restore scroll positions
+  scrollSnapshot.forEach((item) => {
+    const el = app.querySelector(item.selector);
+    if (el) {
+      el.scrollTop = item.top;
+      el.scrollLeft = item.left;
+    }
+  });
+
+  // 3. Keep active slide tab visible & aligned in the horizontal tabs bar
+  const activeSlideTab = app.querySelector(".ppt-slide-tab.is-active, .ppt-q-nav-btn.is-active");
+  if (activeSlideTab) {
+    activeSlideTab.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "auto" });
+  }
+
+  // 4. Restore active focus if needed
+  if (activeFieldInfo && activeFieldInfo.selector) {
+    const inputEl = app.querySelector(activeFieldInfo.selector);
+    if (inputEl) {
+      inputEl.focus();
+      if (activeFieldInfo.start !== undefined && inputEl.setSelectionRange) {
+        try {
+          inputEl.setSelectionRange(activeFieldInfo.start, activeFieldInfo.end);
+        } catch (_) {}
+      }
+    }
+  }
+
   requestAnimationFrame(fitEquationPreview);
   saveState(state);
 }
 
 function normalizeAppMode(value) {
-  if (value === "math-figures" || value === "image-tools") return value;
+  if (value === "math-figures" || value === "image-tools" || value === "ppt-builder") return value;
   return "equation";
 }
 
@@ -75,6 +304,7 @@ function preserveDrawingMode(defaultMode = "math-figures") {
 }
 
 function bindEvents() {
+  bindPptEvents();
   app.querySelectorAll("[data-action]").forEach((node) => {
     node.addEventListener("click", handleAction);
   });
@@ -1379,7 +1609,7 @@ function applySavedImageResizeSettings(root) {
   const settings = loadImageResizeSettings();
   root.querySelectorAll("[data-image-resize-option]").forEach((node) => {
     const key = node.dataset.imageResizeOption;
-    if (!key || key === "scaleSlider") return;
+    if (!key) return;
     if (!Object.prototype.hasOwnProperty.call(settings, key)) return;
     if (node.type === "checkbox") {
       node.checked = Boolean(settings[key]);
@@ -1387,10 +1617,6 @@ function applySavedImageResizeSettings(root) {
       node.value = settings[key];
     }
   });
-
-  const scale = root.querySelector('[data-image-resize-option="scale"]')?.value || "100";
-  const scaleSlider = root.querySelector('[data-image-resize-option="scaleSlider"]');
-  if (scaleSlider) scaleSlider.value = scale;
 }
 
 function saveImageResizeSettings() {
@@ -1400,7 +1626,7 @@ function saveImageResizeSettings() {
   const settings = {};
   root.querySelectorAll("[data-image-resize-option]").forEach((node) => {
     const key = node.dataset.imageResizeOption;
-    if (!key || key === "scaleSlider") return;
+    if (!key) return;
     settings[key] = node.type === "checkbox" ? node.checked : node.value;
   });
 
@@ -1473,7 +1699,7 @@ async function addImageResizeFiles(fileList) {
   ensureImageResizeSelection();
 
   if (addedCount && imageResizeItems.length === addedCount) {
-    applyImageResizeScaleToDimensions();
+    applyImageResizeOriginalDimensions();
   }
 
   renderImageResizeQueue();
@@ -1500,7 +1726,7 @@ function handleImageResizeListAction(event) {
 
   if (!button && itemNode) {
     imageResizeSelectedId = itemNode.dataset.imageResizeItemId || "";
-    applyImageResizeScaleToDimensions();
+    applyImageResizeOriginalDimensions();
     renderImageResizeQueue();
     updateImageResizeWorkspace();
     return;
@@ -1517,7 +1743,7 @@ function handleImageResizeListAction(event) {
     imageResizeItems.splice(index, 1);
     if (imageResizeSelectedId === removedId) {
       imageResizeSelectedId = imageResizeItems[Math.min(index, imageResizeItems.length - 1)]?.id || "";
-      applyImageResizeScaleToDimensions();
+      applyImageResizeOriginalDimensions();
     }
     ensureImageResizeSelection();
     renderImageResizeQueue();
@@ -1528,13 +1754,10 @@ function handleImageResizeListAction(event) {
 
 function handleImageResizeOptionInput(event) {
   const option = event.currentTarget.dataset.imageResizeOption;
-  if (option === "scale" || option === "scaleSlider") {
-    syncImageResizeScale(option);
-    applyImageResizeScaleToDimensions();
-  } else if (option === "width" || option === "height") {
+  if (option === "width" || option === "height") {
     syncImageResizeLockedDimension(option);
   } else if (option === "unit" || option === "dpi") {
-    applyImageResizeScaleToDimensions();
+    applyImageResizeOriginalDimensions();
   } else if (option === "lockRatio") {
     syncImageResizeLockedDimension("width");
   }
@@ -1545,20 +1768,7 @@ function handleImageResizeOptionInput(event) {
   updateImageResizeWorkspace();
 }
 
-function syncImageResizeScale(source) {
-  const root = app.querySelector("[data-image-resize-tool]");
-  if (!root) return;
-
-  const scale = root.querySelector('[data-image-resize-option="scale"]');
-  const slider = root.querySelector('[data-image-resize-option="scaleSlider"]');
-  const sourceNode = source === "scaleSlider" ? slider : scale;
-  const value = clamp(Math.round(Number(sourceNode?.value || 100)), 1, 500);
-
-  if (scale) scale.value = String(value);
-  if (slider) slider.value = String(value);
-}
-
-function applyImageResizeScaleToDimensions() {
+function applyImageResizeOriginalDimensions() {
   const first = getSelectedImageResizeItem();
   const root = app.querySelector("[data-image-resize-tool]");
   if (!first || !root) return;
@@ -1566,10 +1776,9 @@ function applyImageResizeScaleToDimensions() {
   const options = readImageResizeOptions();
   const widthInput = root.querySelector('[data-image-resize-option="width"]');
   const heightInput = root.querySelector('[data-image-resize-option="height"]');
-  const scale = clamp(Number(options.scale) || 100, 1, 500) / 100;
 
-  if (widthInput) widthInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.width * scale, options.unit, options.dpi), options.unit);
-  if (heightInput) heightInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.height * scale, options.unit, options.dpi), options.unit);
+  if (widthInput) widthInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.width, options.unit, options.dpi), options.unit);
+  if (heightInput) heightInput.value = formatImageResizeUnitValue(pixelsToImageResizeUnit(first.height, options.unit, options.dpi), options.unit);
 }
 
 function syncImageResizeLockedDimension(changedOption) {
@@ -1598,11 +1807,8 @@ function syncImageResizeLabels() {
   const root = app.querySelector("[data-image-resize-tool]");
   if (!root) return;
 
-  const scale = clamp(Math.round(Number(root.querySelector('[data-image-resize-option="scale"]')?.value || 100)), 1, 500);
   const quality = clamp(Math.round(Number(root.querySelector('[data-image-resize-option="quality"]')?.value || 92)), 20, 100);
-  const scaleLabel = root.querySelector("[data-image-resize-scale-value]");
   const qualityLabel = root.querySelector("[data-image-resize-quality-value]");
-  if (scaleLabel) scaleLabel.textContent = `${scale}%`;
   if (qualityLabel) qualityLabel.textContent = `${quality}%`;
 }
 
@@ -1615,7 +1821,6 @@ function readImageResizeOptions() {
     width: Math.max(0, Number(read("width", 0)) || 0),
     height: Math.max(0, Number(read("height", 0)) || 0),
     lockRatio: root?.querySelector('[data-image-resize-option="lockRatio"]')?.checked ?? true,
-    scale: clamp(Number(read("scale", 100)) || 100, 1, 500),
     targetSize: Math.max(0, Number(read("targetSize", 0)) || 0),
     targetUnit: read("targetUnit", "kb") === "mb" ? "mb" : "kb",
     quality: clamp(Number(read("quality", 92)) || 92, 20, 100),
@@ -1787,11 +1992,10 @@ function renderImageResizeQueue() {
 
 function getImageResizeOutputPixels(item, options, shouldThrow = true) {
   const ratio = item.width > 0 && item.height > 0 ? item.width / item.height : 1;
-  const scale = clamp(Number(options.scale) || 100, 1, 500) / 100;
   const hasWidth = options.width > 0;
   const hasHeight = options.height > 0;
-  let width = hasWidth ? imageResizeUnitToPixels(options.width, options.unit, options.dpi) : item.width * scale;
-  let height = hasHeight ? imageResizeUnitToPixels(options.height, options.unit, options.dpi) : item.height * scale;
+  let width = hasWidth ? imageResizeUnitToPixels(options.width, options.unit, options.dpi) : item.width;
+  let height = hasHeight ? imageResizeUnitToPixels(options.height, options.unit, options.dpi) : item.height;
 
   if (options.lockRatio) {
     if (hasWidth && !hasHeight) {
@@ -2020,6 +2224,10 @@ function handleAction(event) {
   const node = event.target.closest("[data-action]");
   if (!node) return;
   const action = node.dataset.action;
+  if (action && action.startsWith("ppt-")) {
+    handlePptAction(action, node);
+    return;
+  }
   if (action === "switch-mode") {
     recordUndo();
     state.mode = normalizeAppMode(node.dataset.mode);
@@ -4438,5 +4646,1590 @@ function fitEquationPreview() {
 
   if (scale < 1) {
     render.style.fontSize = `${Math.max(16, Math.floor(baseSize * scale))}px`;
+  }
+}
+
+
+/* ==================== PPT BUILDER LOGIC ==================== */
+
+function ensurePptState() {
+  if (!state.ppt) {
+    state.ppt = {
+      settings: { ...defaultPptSettings },
+      questions: [...sampleQuestions],
+      activeQuestionIndex: 0,
+      showPasteBox: false
+    };
+  }
+  state.ppt.settings = { ...defaultPptSettings, ...(state.ppt.settings || {}) };
+  if (!state.ppt.questions || !state.ppt.questions.length) state.ppt.questions = [...sampleQuestions];
+}
+
+function bindPptEvents() {
+  if (state.mode !== "ppt-builder") return;
+  ensurePptState();
+
+  const fileInput = app.querySelector("[data-ppt-file-input]");
+  if (fileInput) {
+    fileInput.addEventListener("change", handlePptFileInput);
+  }
+
+  const diagramFileInput = app.querySelector("[data-ppt-diagram-file-input]");
+  if (diagramFileInput) {
+    diagramFileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (loadEvt) => {
+          attachImageToActiveSlide(loadEvt.target.result);
+          diagramFileInput.value = "";
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  const dropzone = app.querySelector(".ppt-dropzone");
+  if (dropzone) {
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("is-dragover");
+    });
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("is-dragover");
+    });
+    dropzone.addEventListener("drop", handlePptFileDrop);
+  }
+
+  // Track focused text input (middle editor)
+  app.querySelectorAll("[data-ppt-q-field], [data-ppt-option-index], [data-ppt-paste-input]").forEach((input) => {
+    input.addEventListener("focus", () => {
+      lastFocusedPptInput = input;
+      lastFocusedPptCanvasTarget = null;
+      if (input.hasAttribute("data-ppt-option-index")) {
+        lastActiveFormattingTarget = "options";
+      } else if (input.dataset.pptQField === "hindi") {
+        lastActiveFormattingTarget = "hindi";
+      } else if (input.dataset.pptQField === "topic") {
+        lastActiveFormattingTarget = "topic";
+      } else if (input.dataset.pptQField === "exam") {
+        lastActiveFormattingTarget = "exam";
+      } else {
+        lastActiveFormattingTarget = "english";
+      }
+      updateToolbarDisplay();
+    });
+  });
+
+  // Track focused editable canvas elements (on-slide)
+  app.querySelectorAll(".ppt-slide-canvas-wrapper [contenteditable='true']").forEach((el) => {
+    el.addEventListener("focus", () => {
+      lastFocusedPptCanvasTarget = el;
+      lastFocusedPptInput = null;
+      if (el.dataset.pptCanvasField === "option" || el.closest(".slide-options-container")) {
+        lastActiveFormattingTarget = "options";
+      } else if (el.dataset.pptCanvasField === "hindi" || el.closest(".slide-hindi-section")) {
+        lastActiveFormattingTarget = "hindi";
+      } else if (el.dataset.pptCanvasField === "topic" || el.closest(".slide-topic-box")) {
+        lastActiveFormattingTarget = "topic";
+      } else if (el.dataset.pptCanvasField === "exam" || el.closest(".slide-exam-section")) {
+        lastActiveFormattingTarget = "exam";
+      } else {
+        lastActiveFormattingTarget = "english";
+      }
+      updateToolbarDisplay();
+    });
+    el.addEventListener("input", handlePptCanvasInput);
+  });
+
+  // Live input handlers for active question
+  app.querySelectorAll("[data-ppt-q-field]").forEach((input) => {
+    input.addEventListener("input", handlePptQuestionFieldInput);
+  });
+
+  // Live input handlers for options
+  app.querySelectorAll("[data-ppt-option-index]").forEach((input) => {
+    input.addEventListener("input", handlePptOptionInput);
+  });
+
+  // Live input handlers for customizer settings
+  app.querySelectorAll("[data-ppt-setting]").forEach((input) => {
+    input.addEventListener("input", handlePptSettingInput);
+    input.addEventListener("change", handlePptSettingInput);
+  });
+
+  // Toolbar font select (Context-Aware)
+  const fontSel = app.querySelector('[data-ppt-tb-action="fontFamily"]');
+  if (fontSel) {
+    fontSel.addEventListener("change", (e) => {
+      recordUndo();
+      const isCurrentScope = (state.ppt.applyScope === "current");
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : state.ppt.settings;
+      const targetType = getActiveFormattingTarget();
+
+      if (targetType === "options") {
+        targetObj.optionFontFamily = e.target.value;
+      } else if (targetType === "hindi") {
+        targetObj.hindiFontFamily = e.target.value;
+      } else if (targetType === "topic") {
+        targetObj.topicFontFamily = e.target.value;
+      } else {
+        targetObj.engFontFamily = e.target.value;
+      }
+      updateLiveCanvasSlide();
+      updateToolbarDisplay();
+    });
+  }
+
+  // Toolbar color inputs (Context-Aware)
+  app.querySelectorAll("[data-ppt-tb-color]").forEach((colorInput) => {
+    colorInput.addEventListener("input", (e) => {
+      recordUndo();
+      const type = e.target.dataset.pptTbColor;
+      const isCurrentScope = (state.ppt.applyScope === "current");
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : state.ppt.settings;
+      const targetType = getActiveFormattingTarget();
+
+      if (type === "textColor") {
+        if (targetType === "options") {
+          targetObj.optionTextColor = e.target.value;
+        } else if (targetType === "hindi") {
+          targetObj.hindiColor = e.target.value;
+        } else if (targetType === "topic") {
+          targetObj.topicColor = e.target.value;
+        } else if (targetType === "exam") {
+          targetObj.examColor = e.target.value;
+        } else {
+          targetObj.engColor = e.target.value;
+        }
+      } else if (type === "highlightColor") {
+        targetObj.highlightColor = e.target.value;
+      }
+      syncCustomizerSliders();
+      updateLiveCanvasSlide();
+    });
+  });
+
+  // Toolbar format buttons (bold, italic, underline)
+  app.querySelectorAll("[data-ppt-tb-format]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const fmt = btn.dataset.pptTbFormat;
+      if (fmt === "bold") applyFormatToPptInput("**", "**");
+      else if (fmt === "italic") applyFormatToPptInput("*", "*");
+      else if (fmt === "underline") applyFormatToPptInput("<u>", "</u>");
+    });
+  });
+
+  // Toolbar actions (font-size-inc, dec, align, lists, clean)
+  app.querySelectorAll("[data-ppt-tb-action]").forEach((btn) => {
+    if (btn.tagName === "SELECT") return;
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.pptTbAction;
+      handlePptToolbarAction(action);
+    });
+  });
+
+  // Toolbar LaTeX insertion buttons
+  app.querySelectorAll("[data-ppt-latex]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const latex = btn.dataset.pptLatex;
+      insertLatexSnippet(latex);
+    });
+  });
+
+  // Direct On-Canvas Resize Handles (Interactive Live Resizing)
+  initCanvasResizeHandles();
+  updateToolbarDisplay();
+}
+
+let lastFocusedPptInput = null;
+let lastFocusedPptCanvasTarget = null;
+let lastActiveFormattingTarget = "english";
+
+function getActiveFormattingTarget() {
+  // 1. Check selected canvas bounding box
+  const selectedBox = app.querySelector(".ppt-slide-canvas-wrapper .canva-transform-box.is-selected");
+  if (selectedBox) {
+    if (selectedBox.classList.contains("slide-options-container") || selectedBox.closest(".slide-options-container")) return "options";
+    if (selectedBox.classList.contains("slide-hindi-section") || selectedBox.closest(".slide-hindi-section")) return "hindi";
+    if (selectedBox.classList.contains("slide-topic-box") || selectedBox.closest(".slide-topic-box")) return "topic";
+    if (selectedBox.classList.contains("slide-exam-section") || selectedBox.closest(".slide-exam-section")) return "exam";
+    if (selectedBox.classList.contains("slide-eng-section") || selectedBox.closest(".slide-eng-section")) return "english";
+  }
+
+  // 2. Check focused editable canvas element
+  if (lastFocusedPptCanvasTarget && document.contains(lastFocusedPptCanvasTarget)) {
+    const field = lastFocusedPptCanvasTarget.dataset.pptCanvasField;
+    if (field === "option" || field === "options" || lastFocusedPptCanvasTarget.closest(".slide-options-container")) return "options";
+    if (field === "hindi" || lastFocusedPptCanvasTarget.closest(".slide-hindi-section")) return "hindi";
+    if (field === "topic" || lastFocusedPptCanvasTarget.closest(".slide-topic-box")) return "topic";
+    if (field === "exam" || lastFocusedPptCanvasTarget.closest(".slide-exam-section")) return "exam";
+    if (field === "footer" || lastFocusedPptCanvasTarget.closest(".slide-footer-bar")) return "footer";
+    if (field === "english" || lastFocusedPptCanvasTarget.closest(".slide-eng-section")) return "english";
+  }
+
+  // 3. Check focused middle editor input
+  if (lastFocusedPptInput && document.contains(lastFocusedPptInput)) {
+    if (lastFocusedPptInput.hasAttribute("data-ppt-option-index")) return "options";
+    const qField = lastFocusedPptInput.dataset.pptQField;
+    if (qField === "hindi") return "hindi";
+    if (qField === "topic") return "topic";
+    if (qField === "exam") return "exam";
+    if (qField === "english") return "english";
+  }
+
+  return lastActiveFormattingTarget || "english";
+}
+
+function updateToolbarDisplay() {
+  const targetType = getActiveFormattingTarget();
+  lastActiveFormattingTarget = targetType;
+
+  const activeQ = state.ppt?.questions?.[state.ppt?.activeQuestionIndex];
+  const effective = getSlideSettings(state.ppt?.settings || {}, activeQ);
+
+  let currentSize = effective.engFontSize || 19;
+  let currentFont = effective.engFontFamily || "Segoe UI, Arial, sans-serif";
+  let currentColor = effective.engColor || "#111111";
+  let targetLabel = "English";
+
+  if (targetType === "options") {
+    currentSize = effective.optionFontSize || 18;
+    currentFont = effective.optionFontFamily || effective.engFontFamily || "Segoe UI, Arial, sans-serif";
+    currentColor = effective.optionTextColor || (effective.theme === "dark" ? "#FFFFFF" : "#111111");
+    targetLabel = "Options";
+  } else if (targetType === "hindi") {
+    currentSize = effective.hindiFontSize || 18;
+    currentFont = effective.hindiFontFamily || "Mangal, Noto Sans Devanagari, sans-serif";
+    currentColor = effective.hindiColor || "#7A0000";
+    targetLabel = "Hindi";
+  } else if (targetType === "topic") {
+    currentSize = effective.topicFontSize || 20;
+    currentFont = effective.topicFontFamily || effective.engFontFamily || "Segoe UI, Arial, sans-serif";
+    currentColor = effective.topicColor || "#FFD700";
+    targetLabel = "Topic";
+  } else if (targetType === "exam") {
+    currentSize = effective.examFontSize || 15;
+    currentColor = effective.examTagColor || effective.examColor || "#FFFFFF";
+    targetLabel = "Exam Tag";
+  }
+
+  const sizeDisplay = app.querySelector("[data-ppt-tb-size-display]");
+  if (sizeDisplay) {
+    sizeDisplay.textContent = `${currentSize}px`;
+    sizeDisplay.title = `Font Size (${targetLabel}: ${currentSize}px)`;
+  }
+  const fontSel = app.querySelector('[data-ppt-tb-action="fontFamily"]');
+  if (fontSel && currentFont) {
+    fontSel.value = currentFont;
+  }
+  const colorInput = app.querySelector('[data-ppt-tb-color="textColor"]');
+  if (colorInput && currentColor) {
+    colorInput.value = currentColor.startsWith("#") ? currentColor : "#111111";
+  }
+}
+
+function applyFormatToPptInput(prefix, suffix) {
+  if (lastFocusedPptCanvasTarget && document.contains(lastFocusedPptCanvasTarget) && lastFocusedPptCanvasTarget.isContentEditable) {
+    recordUndo();
+    lastFocusedPptCanvasTarget.focus();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const selected = sel.toString();
+      document.execCommand("insertText", false, `${prefix}${selected}${suffix}`);
+    } else {
+      document.execCommand("insertText", false, `${prefix}text${suffix}`);
+    }
+    lastFocusedPptCanvasTarget.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+
+  const input = lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
+  if (!input) return;
+  recordUndo();
+  const start = input.selectionStart || 0;
+  const end = input.selectionEnd || 0;
+  const val = input.value || "";
+  const selected = val.substring(start, end);
+  const replacement = selected ? `${prefix}${selected}${suffix}` : `${prefix}text${suffix}`;
+  input.value = val.substring(0, start) + replacement + val.substring(end);
+  input.selectionStart = start + prefix.length;
+  input.selectionEnd = start + prefix.length + (selected ? selected.length : 4);
+  input.focus();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function insertLatexSnippet(snippet) {
+  if (lastFocusedPptCanvasTarget && document.contains(lastFocusedPptCanvasTarget) && lastFocusedPptCanvasTarget.isContentEditable) {
+    recordUndo();
+    lastFocusedPptCanvasTarget.focus();
+    document.execCommand("insertText", false, snippet);
+    lastFocusedPptCanvasTarget.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
+
+  const input = lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
+  if (!input) return;
+  recordUndo();
+  const start = input.selectionStart || 0;
+  const end = input.selectionEnd || 0;
+  const val = input.value || "";
+  const selected = val.substring(start, end);
+
+  let insertion = snippet;
+  if (snippet.includes("a") && snippet.includes("b") && selected) {
+    insertion = `\\frac{${selected}}{}`;
+  } else if (snippet.includes("x") && selected) {
+    insertion = snippet.replace("x", selected);
+  }
+
+  input.value = val.substring(0, start) + insertion + val.substring(end);
+  input.selectionStart = input.selectionEnd = start + insertion.length;
+  input.focus();
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function handlePptCanvasInput(e) {
+  ensurePptState();
+  if (!pptInputUndoTimer) {
+    recordUndo();
+  }
+  clearTimeout(pptInputUndoTimer);
+  pptInputUndoTimer = setTimeout(() => {
+    pptInputUndoTimer = null;
+  }, 1000);
+
+  const field = e.target.dataset.pptCanvasField;
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  if (!activeQ) return;
+  const text = e.target.innerText || e.target.textContent || "";
+
+  if (field === "english") {
+    activeQ.english = text;
+    const txtArea = app.querySelector('[data-ppt-q-field="english"]');
+    if (txtArea && document.activeElement !== txtArea) txtArea.value = text;
+  } else if (field === "hindi") {
+    activeQ.hindi = text;
+    const txtArea = app.querySelector('[data-ppt-q-field="hindi"]');
+    if (txtArea && document.activeElement !== txtArea) txtArea.value = text;
+  } else if (field === "number") {
+    activeQ.number = text;
+    const input = app.querySelector('[data-ppt-q-field="number"]');
+    if (input && document.activeElement !== input) input.value = text;
+    const activePill = app.querySelector(`.ppt-slide-pill[data-slide-index="${state.ppt.activeQuestionIndex}"]`);
+    if (activePill) activePill.textContent = text;
+  } else if (field === "exam") {
+    activeQ.exam = text;
+    const input = app.querySelector('[data-ppt-q-field="exam"]');
+    if (input && document.activeElement !== input) input.value = text;
+  } else if (field === "topic") {
+    activeQ.topic = text;
+    const input = app.querySelector('[data-ppt-q-field="topic"]');
+    if (input && document.activeElement !== input) input.value = text;
+  } else if (field === "option") {
+    const oIdx = Number(e.target.dataset.pptCanvasOptIdx || 0);
+    if (!activeQ.options) activeQ.options = [];
+    if (!activeQ.options[oIdx]) {
+      activeQ.options[oIdx] = { key: String.fromCharCode(65 + oIdx), text };
+    } else {
+      activeQ.options[oIdx].text = text;
+    }
+    const optInput = app.querySelector(`[data-ppt-option-index="${oIdx}"]`);
+    if (optInput && document.activeElement !== optInput) optInput.value = text;
+  } else if (field === "footer") {
+    state.ppt.settings.footerText = text;
+    const footerInput = app.querySelector('[data-ppt-setting="footerText"]');
+    if (footerInput && document.activeElement !== footerInput) footerInput.value = text;
+  }
+
+  saveState(state);
+}
+
+function handlePptToolbarAction(action) {
+  ensurePptState();
+  const isCurrentScope = (state.ppt.applyScope === "current");
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  const effective = getSlideSettings(state.ppt.settings, activeQ);
+  const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : state.ppt.settings;
+
+  if (action === "undo") {
+    undoState();
+    return;
+  }
+  if (action === "redo") {
+    redoState();
+    return;
+  }
+
+  recordUndo();
+  const targetType = getActiveFormattingTarget();
+
+  if (action === "font-size-inc") {
+    if (targetType === "options") {
+      targetObj.optionFontSize = Math.min(36, (effective.optionFontSize || 18) + 1);
+    } else if (targetType === "hindi") {
+      targetObj.hindiFontSize = Math.min(36, (effective.hindiFontSize || 18) + 1);
+    } else if (targetType === "topic") {
+      targetObj.topicFontSize = Math.min(36, (effective.topicFontSize || 20) + 1);
+    } else if (targetType === "exam") {
+      targetObj.examFontSize = Math.min(28, (effective.examFontSize || 15) + 1);
+    } else {
+      targetObj.engFontSize = Math.min(36, (effective.engFontSize || 19) + 1);
+    }
+    syncCustomizerSliders();
+    updateLiveCanvasSlide();
+    updateToolbarDisplay();
+  } else if (action === "font-size-dec") {
+    if (targetType === "options") {
+      targetObj.optionFontSize = Math.max(10, (effective.optionFontSize || 18) - 1);
+    } else if (targetType === "hindi") {
+      targetObj.hindiFontSize = Math.max(10, (effective.hindiFontSize || 18) - 1);
+    } else if (targetType === "topic") {
+      targetObj.topicFontSize = Math.max(12, (effective.topicFontSize || 20) - 1);
+    } else if (targetType === "exam") {
+      targetObj.examFontSize = Math.max(10, (effective.examFontSize || 15) - 1);
+    } else {
+      targetObj.engFontSize = Math.max(10, (effective.engFontSize || 19) - 1);
+    }
+    syncCustomizerSliders();
+    updateLiveCanvasSlide();
+    updateToolbarDisplay();
+  } else if (action === "align-left" || action === "align-center" || action === "align-right") {
+    const align = action.replace("align-", "");
+    if (targetType === "options") {
+      targetObj.optionAlign = align;
+    } else {
+      targetObj.textAlign = align;
+    }
+    syncCustomizerSliders();
+    updateLiveCanvasSlide();
+    updateToolbarDisplay();
+  } else if (action === "bullet-list") {
+    const input = lastFocusedPptCanvasTarget || lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
+    if (input) {
+      if (input.isContentEditable) {
+        document.execCommand("insertText", false, "\n• ");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        const start = input.selectionStart || 0;
+        const val = input.value || "";
+        const prefix = (start > 0 && val[start - 1] !== "\n" ? "\n" : "") + "• ";
+        input.value = val.substring(0, start) + prefix + val.substring(start);
+        input.selectionStart = input.selectionEnd = start + prefix.length;
+        input.focus();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+  } else if (action === "number-list") {
+    const input = lastFocusedPptCanvasTarget || lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
+    if (input) {
+      if (input.isContentEditable) {
+        document.execCommand("insertText", false, "\n1. ");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        const start = input.selectionStart || 0;
+        const val = input.value || "";
+        const prefix = (start > 0 && val[start - 1] !== "\n" ? "\n" : "") + "1. ";
+        input.value = val.substring(0, start) + prefix + val.substring(start);
+        input.selectionStart = input.selectionEnd = start + prefix.length;
+        input.focus();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+  } else if (action === "clear-format") {
+    const input = lastFocusedPptCanvasTarget || lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
+    if (input) {
+      if (input.isContentEditable) {
+        input.innerText = input.innerText.replace(/[\*\_\`\~]|<\/?u>/g, "");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        input.value = input.value.replace(/[\*\_\`\~]|<\/?u>/g, "");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+  } else if (action === "clean-math") {
+    const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+    if (activeQ) {
+      if (activeQ.english) activeQ.english = activeQ.english.replace(/\\\[|\\\]/g, "$$").replace(/\\\(|\\\)/g, "$").trim();
+      if (activeQ.hindi) activeQ.hindi = activeQ.hindi.replace(/\\\[|\\\]/g, "$$").replace(/\\\(|\\\)/g, "$").trim();
+      if (activeQ.options) {
+        activeQ.options.forEach((o) => {
+          if (o.text) o.text = o.text.replace(/\\\[|\\\]/g, "$$").replace(/\\\(|\\\)/g, "$").trim();
+        });
+      }
+      render();
+    }
+  }
+}
+
+function handlePptAction(action, target) {
+  ensurePptState();
+  const ppt = state.ppt;
+  const isCurrentScope = (ppt.applyScope === "current");
+  const activeQ = ppt.questions[ppt.activeQuestionIndex];
+
+  switch (action) {
+    case "ppt-set-scope": {
+      const scope = target.dataset.scope || "all";
+      recordUndo();
+      ppt.applyScope = scope;
+      render();
+      break;
+    }
+    case "ppt-apply-slide-to-all": {
+      if (activeQ && activeQ.settings && Object.keys(activeQ.settings).length > 0) {
+        recordUndo();
+        ppt.settings = { ...ppt.settings, ...activeQ.settings };
+        delete activeQ.settings;
+        render();
+      }
+      break;
+    }
+    case "ppt-reset-slide-override": {
+      if (activeQ && activeQ.settings) {
+        recordUndo();
+        delete activeQ.settings;
+        render();
+      }
+      break;
+    }
+    case "ppt-set-theme": {
+      const themeKey = target.dataset.theme;
+      const themeObj = pptThemes[themeKey];
+      if (themeObj) {
+        recordUndo();
+        if (isCurrentScope && activeQ) {
+          activeQ.settings = { ...(activeQ.settings || {}), ...themeObj, theme: themeKey };
+        } else {
+          ppt.settings = { ...ppt.settings, ...themeObj, theme: themeKey };
+        }
+        render();
+      }
+      break;
+    }
+    case "ppt-set-layout-preset": {
+      const preset = target.dataset.preset || "full-width";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.layoutPreset = preset;
+      if (preset === "right-split") {
+        targetObj.boxPosX = 42;
+        targetObj.questionBoxWidth = 56;
+      } else if (preset === "left-split") {
+        targetObj.boxPosX = 0;
+        targetObj.questionBoxWidth = 56;
+      } else {
+        targetObj.boxPosX = 0;
+        targetObj.questionBoxWidth = 100;
+      }
+      render();
+      break;
+    }
+    case "ppt-set-option-style": {
+      const style = target.dataset.style || "card";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.optionStyle = style;
+      render();
+      break;
+    }
+    case "ppt-wizard-set-preset": {
+      const preset = target.dataset.preset;
+      if (!ppt.wizardSettings) ppt.wizardSettings = { ...ppt.settings };
+      ppt.wizardSettings.layoutPreset = preset;
+      if (preset === "right-split") {
+        ppt.wizardSettings.boxPosX = 42;
+        ppt.wizardSettings.questionBoxWidth = 56;
+      } else if (preset === "left-split") {
+        ppt.wizardSettings.boxPosX = 0;
+        ppt.wizardSettings.questionBoxWidth = 56;
+      } else {
+        ppt.wizardSettings.boxPosX = 0;
+        ppt.wizardSettings.questionBoxWidth = 100;
+      }
+      render();
+      break;
+    }
+    case "ppt-wizard-set-option-style": {
+      const optStyle = target.dataset.style;
+      if (!ppt.wizardSettings) ppt.wizardSettings = { ...ppt.settings };
+      ppt.wizardSettings.optionStyle = optStyle;
+      render();
+      break;
+    }
+    case "ppt-wizard-set-theme": {
+      const themeKey = target.dataset.theme;
+      const themeObj = pptThemes[themeKey];
+      if (!ppt.wizardSettings) ppt.wizardSettings = { ...ppt.settings };
+      if (themeObj) {
+        ppt.wizardSettings = { ...ppt.wizardSettings, ...themeObj, theme: themeKey };
+      }
+      render();
+      break;
+    }
+    case "ppt-cancel-wizard": {
+      ppt.showImportWizard = false;
+      ppt.pendingImportQuestions = null;
+      ppt.wizardSettings = null;
+      render();
+      break;
+    }
+    case "ppt-confirm-wizard-generate": {
+      recordUndo();
+      if (ppt.pendingImportQuestions && ppt.pendingImportQuestions.length) {
+        ppt.questions = ppt.pendingImportQuestions;
+        ppt.activeQuestionIndex = 0;
+      }
+      if (ppt.wizardSettings) {
+        ppt.settings = { ...ppt.settings, ...ppt.wizardSettings };
+      }
+      ppt.showImportWizard = false;
+      ppt.pendingImportQuestions = null;
+      ppt.wizardSettings = null;
+      render();
+      break;
+    }
+    case "ppt-set-option-layout": {
+      const layout = target.dataset.layout || "2-col";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.optionsLayout = layout;
+      render();
+      break;
+    }
+    case "ppt-set-exam-position": {
+      const pos = target.dataset.position || "below-question";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.examTagPosition = pos;
+      render();
+      break;
+    }
+    case "ppt-set-exam-style": {
+      const style = target.dataset.style || "pill";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.examTagStyle = style;
+      render();
+      break;
+    }
+    case "ppt-reset-positions": {
+      recordUndo();
+      if (isCurrentScope && activeQ && activeQ.settings) {
+        delete activeQ.settings;
+      } else {
+        ppt.settings.boxPosX = 0;
+        ppt.settings.boxPosY = 0;
+        ppt.settings.engPosX = 0;
+        ppt.settings.engPosY = 0;
+        ppt.settings.engWidth = 100;
+        ppt.settings.hindiPosX = 0;
+        ppt.settings.hindiPosY = 0;
+        ppt.settings.hindiWidth = 100;
+        ppt.settings.topicPosX = 0;
+        ppt.settings.topicPosY = 0;
+        ppt.settings.dividerPosX = 0;
+        ppt.settings.dividerWidth = 100;
+        ppt.settings.examTagPosX = 0;
+        ppt.settings.examTagPosY = 0;
+        ppt.settings.optionsPosX = 0;
+        ppt.settings.optionsPosY = 0;
+        ppt.settings.optionWidthPercent = 96;
+      }
+      render();
+      break;
+    }
+    case "ppt-divider-match-eng": {
+      recordUndo();
+      const eff = getSlideSettings(ppt.settings, activeQ);
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.dividerWidth = eff.engWidth || 100;
+      targetObj.dividerPosX = eff.engPosX || 0;
+      render();
+      break;
+    }
+    case "ppt-browse-file": {
+      const fileInput = app.querySelector("[data-ppt-file-input]");
+      if (fileInput) fileInput.click();
+      break;
+    }
+    case "ppt-open-paste-box": {
+      ppt.showPasteBox = true;
+      render();
+      break;
+    }
+    case "ppt-close-paste-box": {
+      ppt.showPasteBox = false;
+      render();
+      break;
+    }
+    case "ppt-process-paste": {
+      const textarea = app.querySelector("[data-ppt-paste-input]");
+      const rawText = textarea ? textarea.value : "";
+      if (!rawText.trim()) {
+        alert("Please paste question text.");
+        return;
+      }
+      const parsed = parseQuestionsText(rawText, ppt.settings.topic);
+      if (parsed.length) {
+        recordUndo();
+        ppt.pendingImportQuestions = parsed;
+        ppt.wizardSettings = {
+          ...ppt.settings,
+          layoutPreset: "right-split",
+          boxPosX: 42,
+          questionBoxWidth: 56,
+          optionStyle: "clean",
+          theme: "dark",
+          ...(pptThemes?.dark || {})
+        };
+        ppt.showImportWizard = true;
+        ppt.showPasteBox = false;
+        render();
+      } else {
+        alert("Could not parse any questions. Please check the format.");
+      }
+      break;
+    }
+    case "ppt-load-samples": {
+      recordUndo();
+      ppt.questions = JSON.parse(JSON.stringify(sampleQuestions));
+      ppt.activeQuestionIndex = 0;
+      render();
+      break;
+    }
+    case "ppt-set-theme": {
+      const themeKey = target.dataset.theme || "maroon";
+      const preset = pptThemes[themeKey];
+      if (preset) {
+        recordUndo();
+        ppt.settings = {
+          ...ppt.settings,
+          ...preset,
+          theme: themeKey
+        };
+        render();
+      }
+      break;
+    }
+    case "ppt-prev-slide": {
+      if (ppt.activeQuestionIndex > 0) {
+        ppt.activeQuestionIndex -= 1;
+        render();
+      }
+      break;
+    }
+    case "ppt-next-slide": {
+      if (ppt.activeQuestionIndex < ppt.questions.length - 1) {
+        ppt.activeQuestionIndex += 1;
+        render();
+      }
+      break;
+    }
+    case "ppt-select-slide":
+    case "ppt-jump-slide": {
+      const slideBtn = target.closest("[data-slide-index]");
+      const idx = Number(slideBtn ? slideBtn.dataset.slideIndex : (target.dataset.slideIndex || 0));
+      if (!isNaN(idx)) {
+        recordUndo();
+        ppt.activeQuestionIndex = Math.max(0, Math.min(idx, ppt.questions.length - 1));
+        render();
+      }
+      break;
+    }
+    case "ppt-add-slide": {
+      recordUndo();
+      const newIndex = ppt.questions.length + 1;
+      ppt.questions.push({
+        id: `q_${Date.now()}`,
+        number: `Q.${newIndex}`,
+        exam: ppt.settings.defaultExam || "SSC CGL (Shift 1)",
+        topic: ppt.settings.topic || "TOPIC",
+        english: "",
+        hindi: "",
+        options: [
+          { key: "A", text: "" },
+          { key: "B", text: "" },
+          { key: "C", text: "" },
+          { key: "D", text: "" }
+        ]
+      });
+      ppt.activeQuestionIndex = ppt.questions.length - 1;
+      render();
+      break;
+    }
+    case "ppt-duplicate-slide": {
+      const currentQ = ppt.questions[ppt.activeQuestionIndex];
+      if (currentQ) {
+        recordUndo();
+        const copy = JSON.parse(JSON.stringify(currentQ));
+        copy.id = `q_${Date.now()}`;
+        copy.number = `Q.${ppt.questions.length + 1}`;
+        ppt.questions.splice(ppt.activeQuestionIndex + 1, 0, copy);
+        ppt.activeQuestionIndex += 1;
+        render();
+      }
+      break;
+    }
+    case "ppt-delete-slide": {
+      if (ppt.questions.length <= 1) {
+        alert("Cannot delete the only slide.");
+        return;
+      }
+      if (confirm("Delete this slide?")) {
+        recordUndo();
+        ppt.questions.splice(ppt.activeQuestionIndex, 1);
+        ppt.activeQuestionIndex = Math.max(0, Math.min(ppt.activeQuestionIndex, ppt.questions.length - 1));
+        render();
+      }
+      break;
+    }
+    case "ppt-export-pptx": {
+      handlePptExportPptx();
+      break;
+    }
+    case "ppt-export-pdf-high": {
+      handlePptExportPdf("high");
+      break;
+    }
+    case "ppt-export-pdf-medium": {
+      handlePptExportPdf("medium");
+      break;
+    }
+    case "ppt-trigger-image-upload": {
+      const diagInput = app.querySelector("[data-ppt-diagram-file-input]");
+      if (diagInput) diagInput.click();
+      break;
+    }
+    case "ppt-remove-image": {
+      const imgId = target?.dataset?.imageId;
+      if (activeQ) {
+        recordUndo();
+        if (Array.isArray(activeQ.images)) {
+          if (imgId) {
+            activeQ.images = activeQ.images.filter((im) => (im.id || im) !== imgId);
+          } else {
+            activeQ.images.pop();
+          }
+        }
+        delete activeQ.image;
+        render();
+      }
+      break;
+    }
+    case "ppt-paste-image-clipboard": {
+      pastePptImageFromClipboard();
+      break;
+    }
+    case "ppt-export-pdf-low": {
+      handlePptExportPdf("low");
+      break;
+    }
+  }
+}
+
+async function handlePptFileInput(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  await processUploadedPptFile(file);
+}
+
+async function handlePptFileDrop(e) {
+  e.preventDefault();
+  const dropzone = app.querySelector(".ppt-dropzone");
+  if (dropzone) dropzone.classList.remove("is-dragover");
+
+  const file = e.dataTransfer.files?.[0];
+  if (!file) return;
+  await processUploadedPptFile(file);
+}
+
+async function processUploadedPptFile(file) {
+  ensurePptState();
+  const isDocx = file.name.endsWith(".docx") || file.type.includes("wordprocessingml");
+
+  try {
+    let parsed = [];
+    if (isDocx) {
+      parsed = await parseDocxFile(file);
+    } else {
+      const text = await file.text();
+      parsed = parseQuestionsText(text, state.ppt.settings.topic);
+    }
+
+    if (parsed && parsed.length) {
+      recordUndo();
+      state.ppt.pendingImportQuestions = parsed;
+      state.ppt.wizardSettings = {
+        ...state.ppt.settings,
+        layoutPreset: "right-split",
+        boxPosX: 42,
+        questionBoxWidth: 56,
+        optionStyle: "clean",
+        theme: "dark",
+        ...(pptThemes?.dark || {})
+      };
+      state.ppt.showImportWizard = true;
+      render();
+    } else {
+      alert("No questions could be extracted from this file. Please check format.");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Error parsing file: " + err.message);
+  }
+}
+
+let pptInputUndoTimer = null;
+
+function handlePptQuestionFieldInput(e) {
+  ensurePptState();
+  if (!pptInputUndoTimer) {
+    recordUndo();
+  }
+  clearTimeout(pptInputUndoTimer);
+  pptInputUndoTimer = setTimeout(() => {
+    pptInputUndoTimer = null;
+  }, 1000);
+
+  const field = e.target.dataset.pptQField;
+  const val = e.target.value;
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  if (!activeQ) return;
+
+  activeQ[field] = val;
+  updateLiveCanvasSlide();
+}
+
+function handlePptOptionInput(e) {
+  ensurePptState();
+  if (!pptInputUndoTimer) {
+    recordUndo();
+  }
+  clearTimeout(pptInputUndoTimer);
+  pptInputUndoTimer = setTimeout(() => {
+    pptInputUndoTimer = null;
+  }, 1000);
+
+  const oIdx = Number(e.target.dataset.pptOptionIndex || 0);
+  const val = e.target.value;
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  if (!activeQ || !activeQ.options) return;
+
+  if (!activeQ.options[oIdx]) {
+    activeQ.options[oIdx] = { key: String.fromCharCode(65 + oIdx), text: val };
+  } else {
+    activeQ.options[oIdx].text = val;
+  }
+  updateLiveCanvasSlide();
+}
+
+function handlePptSettingInput(e) {
+  ensurePptState();
+  recordUndo();
+  const key = e.target.dataset.pptSetting;
+  let val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+  if (e.target.type === "range") val = Number(val);
+
+  const isCurrentScope = (state.ppt.applyScope === "current");
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+
+  if (isCurrentScope && activeQ) {
+    if (!activeQ.settings) activeQ.settings = {};
+    activeQ.settings[key] = val;
+  } else {
+    state.ppt.settings[key] = val;
+  }
+  
+  // If topic changed in settings, update active topic display
+  if (key === "topic" && activeQ) {
+    activeQ.topic = val;
+  }
+
+  updateLiveCanvasSlide();
+}
+
+function initCanvasResizeHandles() {
+  const canvasWrapper = app.querySelector(".ppt-slide-canvas-wrapper");
+  if (!canvasWrapper) return;
+
+  // Click on any canva-transform-box to select it
+  canvasWrapper.querySelectorAll(".canva-transform-box").forEach((box) => {
+    box.addEventListener("mousedown", () => {
+      canvasWrapper.querySelectorAll(".canva-transform-box.is-selected").forEach((el) => {
+        if (el !== box) el.classList.remove("is-selected");
+      });
+      box.classList.add("is-selected");
+      if (box.classList.contains("slide-options-container")) {
+        lastActiveFormattingTarget = "options";
+      } else if (box.classList.contains("slide-hindi-section")) {
+        lastActiveFormattingTarget = "hindi";
+      } else if (box.classList.contains("slide-topic-box")) {
+        lastActiveFormattingTarget = "topic";
+      } else if (box.classList.contains("slide-exam-section")) {
+        lastActiveFormattingTarget = "exam";
+      } else {
+        lastActiveFormattingTarget = "english";
+      }
+      updateToolbarDisplay();
+    });
+  });
+
+  // Handle direct Remove Image button clicks (support multiple images)
+  canvasWrapper.querySelectorAll('[data-action="ppt-remove-image"]').forEach((btn) => {
+    btn.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+    });
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const imgId = btn.dataset.imageId;
+      const activeQ = state.ppt?.questions?.[state.ppt.activeQuestionIndex];
+      if (activeQ) {
+        recordUndo();
+        if (Array.isArray(activeQ.images)) {
+          if (imgId) {
+            activeQ.images = activeQ.images.filter((im) => (im.id || im) !== imgId);
+          } else {
+            activeQ.images.pop();
+          }
+        }
+        delete activeQ.image;
+        render();
+      }
+    });
+  });
+
+  // Diagram / Image Direct Canvas Dragging for each attached image
+  canvasWrapper.querySelectorAll(".slide-image-container").forEach((imgBox) => {
+    imgBox.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".canva-handle") || e.target.closest(".canva-pill-action") || e.target.closest("[data-action]")) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+
+      canvasWrapper.querySelectorAll(".canva-transform-box.is-selected").forEach((el) => {
+        if (el !== imgBox) el.classList.remove("is-selected");
+      });
+      imgBox.classList.add("is-selected");
+
+      recordUndo();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      if (!activeQ) return;
+      const imgList = getQuestionImages(activeQ);
+      const imgId = imgBox.dataset.imageId;
+      const targetImg = imgList.find((im) => (im.id || im) === imgId) || imgList[0];
+      if (!targetImg) return;
+
+      const initialPosX = targetImg.posX || 0;
+      const initialPosY = targetImg.posY || 0;
+
+      function onMouseMove(moveEvent) {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        targetImg.posX = Math.round(initialPosX + deltaX);
+        targetImg.posY = Math.round(initialPosY + deltaY);
+        updateLiveCanvasSlide();
+      }
+
+      function onMouseUp() {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        saveState(state);
+      }
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  });
+
+  canvasWrapper.querySelectorAll("[data-ppt-resize-type]").forEach((handle) => {
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      recordUndo();
+
+      const type = handle.dataset.pptResizeType;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const isCurrentScope = (state.ppt.applyScope === "current");
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      const initialSettings = { ...getSlideSettings(state.ppt.settings, activeQ) };
+      const imgId = handle.dataset.imageId;
+      const imgList = getQuestionImages(activeQ);
+      const targetImg = imgList.find((im) => (im.id || im) === imgId) || imgList[0];
+      const initialImage = targetImg ? { ...targetImg } : { posX: 0, posY: 0, width: 260, height: 200 };
+      const wrapperRect = canvasWrapper.getBoundingClientRect();
+
+      function setTransform(key, value) {
+        if (isCurrentScope && activeQ) {
+          if (!activeQ.settings) activeQ.settings = {};
+          activeQ.settings[key] = value;
+        } else {
+          state.ppt.settings[key] = value;
+        }
+      }      function onMouseMove(moveEvent) {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const deltaPercent = (deltaX / wrapperRect.width) * 100;
+
+        const clampW = (initialW, delta) => Math.round(Math.max(30, Math.min(100, (initialW || 100) + delta)));
+        const clampOptW = (initialW, delta) => Math.round(Math.max(40, Math.min(100, (initialW || 96) + delta)));
+        const clampDivW = (initialW, delta) => Math.round(Math.max(10, Math.min(100, (initialW || 100) + delta)));
+        const clampLH = (initialLH, dY, def = 1.36) => Number(Math.max(1.1, Math.min(2.2, (initialLH || def) + dY / 150)).toFixed(2));
+        const clampPad = (initialPad, dY) => Math.round(Math.max(3, Math.min(18, (initialPad || 8) + dY)));
+        const clampFS = (initialFS, delta, min = 12, max = 32, def = 18) => Math.round(Math.max(min, Math.min(max, (initialFS || def) + delta)));
+
+        // --- 1. ENGLISH SECTION ---
+        if (type === "eng-position") {
+          setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+          setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+        } else if (type === "eng-resize-e" || type === "eng-width") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, deltaPercent));
+        } else if (type === "eng-resize-w") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, -deltaPercent));
+          setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+        } else if (type === "eng-resize-s" || type === "eng-line-height") {
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.36));
+        } else if (type === "eng-resize-n") {
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.36));
+          setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+        } else if (type === "eng-resize-se" || type === "eng-corner") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, deltaPercent));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.36));
+        } else if (type === "eng-resize-sw") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, -deltaPercent));
+          setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.36));
+        } else if (type === "eng-resize-ne") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, deltaPercent));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.36));
+          setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+        } else if (type === "eng-resize-nw") {
+          setTransform("engWidth", clampW(initialSettings.engWidth, -deltaPercent));
+          setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.36));
+          setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+
+        // --- 2. HINDI SECTION ---
+        } else if (type === "hindi-position") {
+          setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+          setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+        } else if (type === "hindi-resize-e" || type === "hindi-width") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, deltaPercent));
+        } else if (type === "hindi-resize-w") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, -deltaPercent));
+          setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+        } else if (type === "hindi-resize-s" || type === "hindi-line-height") {
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.38));
+        } else if (type === "hindi-resize-n") {
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.38));
+          setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+        } else if (type === "hindi-resize-se" || type === "hindi-corner") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, deltaPercent));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.38));
+        } else if (type === "hindi-resize-sw") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, -deltaPercent));
+          setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, deltaY, 1.38));
+        } else if (type === "hindi-resize-ne") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, deltaPercent));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.38));
+          setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+        } else if (type === "hindi-resize-nw") {
+          setTransform("hindiWidth", clampW(initialSettings.hindiWidth, -deltaPercent));
+          setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+          setTransform("lineHeight", clampLH(initialSettings.lineHeight, -deltaY, 1.38));
+          setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+
+        // --- 3. DIVIDER SECTION ---
+        } else if (type === "divider-position") {
+          setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
+          setTransform("dividerPosY", Math.round((initialSettings.dividerPosY || 0) + deltaY));
+        } else if (type === "divider-resize-e" || type === "divider-width") {
+          setTransform("dividerWidth", clampDivW(initialSettings.dividerWidth, deltaPercent));
+        } else if (type === "divider-resize-w") {
+          setTransform("dividerWidth", clampDivW(initialSettings.dividerWidth, -deltaPercent));
+          setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
+        } else if (type === "divider-spacing") {
+          setTransform("dividerSpacing", Math.round(Math.max(0, (initialSettings.dividerSpacing || 6) + deltaY)));
+
+        // --- 4. TOPIC SECTION ---
+        } else if (type === "topic-position") {
+          setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
+          setTransform("topicPosY", Math.round((initialSettings.topicPosY || 0) + deltaY));
+        } else if (type === "topic-resize-se" || type === "topic-resize-ne" || type === "topic-font-size") {
+          setTransform("topicFontSize", clampFS(initialSettings.topicFontSize, deltaX / 8, 12, 40, 20));
+        } else if (type === "topic-resize-sw" || type === "topic-resize-nw") {
+          setTransform("topicFontSize", clampFS(initialSettings.topicFontSize, -deltaX / 8, 12, 40, 20));
+          setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
+
+        // --- 5. EXAM TAG SECTION ---
+        } else if (type === "exam-position") {
+          setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
+          setTransform("examTagPosY", Math.round((initialSettings.examTagPosY || 0) + deltaY));
+        } else if (type === "exam-resize-e" || type === "exam-resize-se" || type === "exam-resize-ne" || type === "exam-font-size") {
+          setTransform("examFontSize", clampFS(initialSettings.examFontSize, deltaX / 8, 10, 36, 15));
+        } else if (type === "exam-resize-w" || type === "exam-resize-sw" || type === "exam-resize-nw") {
+          setTransform("examFontSize", clampFS(initialSettings.examFontSize, -deltaX / 8, 10, 36, 15));
+          setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
+
+        // --- 6. OPTIONS GRID (100% FREE POSITIONING & RESIZING) ---
+        } else if (type === "options-position") {
+          setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+          setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+        } else if (type === "options-resize-e" || type === "options-width") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, deltaPercent));
+        } else if (type === "options-resize-w") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, -deltaPercent));
+          setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+        } else if (type === "options-resize-s" || type === "card-padding") {
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, deltaY));
+        } else if (type === "options-resize-n") {
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, -deltaY));
+          setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+        } else if (type === "options-resize-se" || type === "options-corner") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, deltaPercent));
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, deltaY));
+        } else if (type === "options-resize-sw") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, -deltaPercent));
+          setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, deltaY));
+        } else if (type === "options-resize-ne") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, deltaPercent));
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, -deltaY));
+          setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+        } else if (type === "options-resize-nw") {
+          setTransform("optionWidthPercent", clampOptW(initialSettings.optionWidthPercent, -deltaPercent));
+          setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+          setTransform("optionCardPadding", clampPad(initialSettings.optionCardPadding, -deltaY));
+          setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+
+        // --- 7. OTHER GLOBAL CONTROLS ---
+        } else if (type === "box-position") {
+          const newPosX = Math.max(-20, Math.min(55, (initialSettings.boxPosX || 0) + deltaPercent));
+          setTransform("boxPosX", Math.round(newPosX));
+          setTransform("layoutPreset", "custom");
+        } else if (type === "header-height") {
+          setTransform("headerHeight", Math.round(Math.max(44, Math.min(90, (initialSettings.headerHeight || 64) + deltaY))));
+        } else if (type === "question-width") {
+          setTransform("questionBoxWidth", Math.round(Math.max(60, Math.min(100, (initialSettings.questionBoxWidth || 100) + deltaPercent))));
+        } else if (type === "footer-height") {
+          setTransform("footerHeight", Math.round(Math.max(20, Math.min(50, (initialSettings.footerHeight || 28) - deltaY))));
+
+        // --- 8. DIAGRAM / IMAGE CONTROLS (Multi-Image Support) ---
+        } else if (type === "image-position") {
+          if (targetImg) {
+            targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
+            targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
+          }
+        } else if (type === "image-resize-e") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) + deltaX)));
+          }
+        } else if (type === "image-resize-w") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) - deltaX)));
+            targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
+          }
+        } else if (type === "image-resize-s") {
+          if (targetImg) {
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) + deltaY)));
+          }
+        } else if (type === "image-resize-n") {
+          if (targetImg) {
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) - deltaY)));
+            targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
+          }
+        } else if (type === "image-resize-se") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) + deltaX)));
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) + deltaY)));
+          }
+        } else if (type === "image-resize-sw") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) - deltaX)));
+            targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) + deltaY)));
+          }
+        } else if (type === "image-resize-ne") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) + deltaX)));
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) - deltaY)));
+            targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
+          }
+        } else if (type === "image-resize-nw") {
+          if (targetImg) {
+            targetImg.width = Math.round(Math.max(50, Math.min(850, (initialImage.width || 260) - deltaX)));
+            targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
+            targetImg.height = Math.round(Math.max(40, Math.min(500, (initialImage.height || 200) - deltaY)));
+            targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
+          }
+        }
+
+        syncCustomizerSliders();
+        updateLiveCanvasSlide();
+      }
+
+      function onMouseUp() {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        saveState(state);
+      }
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  });
+}
+
+function syncCustomizerSliders() {
+  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  const settings = getSlideSettings(state.ppt.settings, activeQ);
+  const customizer = app.querySelector(".ppt-tools-panel") || app.querySelector(".ppt-customizer-panel");
+  if (!customizer) return;
+
+  customizer.querySelectorAll("[data-ppt-setting]").forEach((input) => {
+    const key = input.dataset.pptSetting;
+    if (settings[key] !== undefined) {
+      if (input.type === "checkbox") {
+        input.checked = settings[key];
+      } else {
+        input.value = settings[key];
+      }
+    }
+  });
+}
+
+function updateLiveCanvasSlide() {
+  const canvasWrapper = app.querySelector(".ppt-slide-canvas-wrapper");
+  if (!canvasWrapper) return;
+
+  const ppt = state.ppt;
+  const activeQ = ppt.questions[ppt.activeQuestionIndex] || {};
+  const settings = getSlideSettings(ppt.settings, activeQ);
+
+  canvasWrapper.style.background = settings.slideBg || "#FFFFFF";
+
+  // Top Header Bar
+  const headerBar = canvasWrapper.querySelector(".slide-header-bar");
+  if (headerBar) {
+    headerBar.style.background = settings.headerBg || "#7A0000";
+    headerBar.style.height = `${settings.headerHeight || 64}px`;
+  }
+
+  const qBadge = canvasWrapper.querySelector(".slide-q-badge");
+  if (qBadge) {
+    qBadge.style.background = settings.qBadgeBg || "#FFFFFF";
+    qBadge.style.color = settings.qBadgeColor || "#7A0000";
+    qBadge.style.fontSize = `${settings.qBadgeSize || 18}px`;
+    qBadge.textContent = activeQ.number || `Q.${ppt.activeQuestionIndex + 1}`;
+  }
+
+  const examTitle = canvasWrapper.querySelector(".slide-exam-title");
+  if (examTitle) {
+    examTitle.style.display = settings.examTagPosition === "header" ? "block" : "none";
+    examTitle.style.color = settings.examColor || "#FFFFFF";
+    examTitle.style.fontSize = `${settings.examFontSize || 19}px`;
+    examTitle.textContent = activeQ.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+  }
+
+  const topicBox = canvasWrapper.querySelector(".slide-topic-box");
+  if (topicBox) {
+    topicBox.style.transform = `translate(${settings.topicPosX || 0}px, ${settings.topicPosY || 0}px)`;
+  }
+  const topicTitle = canvasWrapper.querySelector(".slide-topic-title");
+  if (topicTitle) {
+    topicTitle.style.color = settings.topicColor || "#FFD700";
+    topicTitle.style.fontSize = `${settings.topicFontSize || 20}px`;
+    topicTitle.textContent = (activeQ.topic || settings.topic || "TOPIC").toUpperCase();
+  }
+
+  // Slide Body Area (Question Box Boundary & Position)
+  const bodyArea = canvasWrapper.querySelector(".slide-body-area");
+  if (bodyArea) {
+    const posX = settings.boxPosX !== undefined ? settings.boxPosX : (settings.layoutPreset === "right-split" ? 42 : 0);
+    const boxW = settings.questionBoxWidth || (settings.layoutPreset === "right-split" || settings.layoutPreset === "left-split" ? 56 : 100);
+    bodyArea.style.marginLeft = `${posX}%`;
+    bodyArea.style.maxWidth = `${boxW}%`;
+    bodyArea.style.padding = `${settings.questionPadding || 16}px 24px`;
+  }
+
+  // English Text Section with Transform & Width
+  const engSection = canvasWrapper.querySelector(".slide-eng-section");
+  if (engSection) {
+    engSection.style.transform = `translate(${settings.engPosX || 0}px, ${settings.engPosY || 0}px)`;
+    engSection.style.width = settings.engWidth ? `${settings.engWidth}%` : "100%";
+  }
+  const engText = canvasWrapper.querySelector(".slide-eng-text");
+  if (engText) {
+    engText.style.color = settings.engColor || "#111111";
+    engText.style.fontSize = `${settings.engFontSize || 19}px`;
+    engText.style.fontFamily = settings.engFontFamily || "Segoe UI, Arial, sans-serif";
+    engText.style.textAlign = settings.textAlign || "left";
+    engText.style.lineHeight = settings.lineHeight || 1.36;
+    if (document.activeElement !== engText) {
+      engText.textContent = activeQ.english || "English question will appear here...";
+    }
+  }
+
+  // Divider Line Wrapper with Width & Transform
+  const dividerWrapper = canvasWrapper.querySelector(".slide-divider-wrapper");
+  if (dividerWrapper) {
+    dividerWrapper.style.display = settings.showDivider !== false ? "block" : "none";
+    dividerWrapper.style.width = settings.dividerWidth ? `${settings.dividerWidth}%` : "100%";
+    dividerWrapper.style.transform = `translate(${settings.dividerPosX || 0}px, ${settings.dividerPosY || 0}px)`;
+    dividerWrapper.style.margin = `${settings.dividerSpacing || 6}px 0`;
+  }
+  const divider = canvasWrapper.querySelector(".slide-divider");
+  if (divider) {
+    divider.style.borderTop = `${settings.dividerThickness || 2}px solid ${settings.dividerColor || "#A30000"}`;
+  }
+
+  // Hindi Text Section with Transform & Width
+  const hindiSection = canvasWrapper.querySelector(".slide-hindi-section");
+  if (hindiSection) {
+    hindiSection.style.transform = `translate(${settings.hindiPosX || 0}px, ${settings.hindiPosY || 0}px)`;
+    hindiSection.style.width = settings.hindiWidth ? `${settings.hindiWidth}%` : "100%";
+  }
+  const hindiText = canvasWrapper.querySelector(".slide-hindi-text");
+  if (hindiText) {
+    hindiText.style.color = settings.hindiColor || "#7A0000";
+    hindiText.style.fontSize = `${settings.hindiFontSize || 18}px`;
+    hindiText.style.fontFamily = settings.hindiFontFamily || "Mangal, Noto Sans Devanagari, Arial, sans-serif";
+    hindiText.style.textAlign = settings.textAlign || "left";
+    hindiText.style.lineHeight = settings.lineHeight || 1.38;
+    if (document.activeElement !== hindiText) {
+      hindiText.textContent = activeQ.hindi || "हिंदी प्रश्न यहाँ दिखाई देगा...";
+    }
+  }
+
+  // Standalone Exam Tag Section (SSC GD / YouTube Lecture Style)
+  const examSection = canvasWrapper.querySelector(".slide-exam-section");
+  if (examSection) {
+    const isBelowQ = settings.examTagPosition === "below-question" || settings.examTagPosition === "above-options";
+    examSection.style.display = isBelowQ ? "inline-block" : "none";
+    examSection.style.transform = `translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px)`;
+    const tagEl = examSection.querySelector(".slide-standalone-exam-tag");
+    if (tagEl) {
+      tagEl.setAttribute("data-style", settings.examTagStyle || "pill");
+      tagEl.style.background = settings.examTagStyle === "pill" ? (settings.examTagBg || "#DC2626") : (settings.examTagStyle === "highlight" ? "#FEF08A" : "transparent");
+      tagEl.style.color = settings.examTagStyle === "pill" ? (settings.examTagColor || "#FFFFFF") : (settings.examTagStyle === "highlight" ? "#854D0E" : (settings.examColor || "#FFFFFF"));
+      tagEl.style.fontSize = `${settings.examFontSize || 15}px`;
+      if (document.activeElement !== tagEl) {
+        tagEl.textContent = activeQ.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+      }
+    }
+  }
+
+  // Options Container & Boundaries with Transform
+  const optContainer = canvasWrapper.querySelector(".slide-options-container");
+  if (optContainer) {
+    optContainer.setAttribute("data-layout", settings.optionsLayout || "2-col");
+    optContainer.setAttribute("data-option-style", settings.optionStyle || "card");
+    optContainer.style.width = `${settings.optionWidthPercent || 96}%`;
+    optContainer.style.gap = `${settings.optionGap || 10}px`;
+    optContainer.style.transform = `translate(${settings.optionsPosX || 0}px, ${settings.optionsPosY || 0}px)`;
+    const optionBoxes = optContainer.querySelectorAll(".slide-option-box");
+    optionBoxes.forEach((box, idx) => {
+      const opt = activeQ.options?.[idx] || { key: String.fromCharCode(65 + idx), text: "" };
+      if (settings.optionStyle === "clean") {
+        box.style.background = "transparent";
+        box.style.border = "none";
+      } else {
+        box.style.background = settings.optionCardBg || "#FFFFFF";
+        box.style.border = `${settings.optionCardBorderWidth ?? 1.5}px solid ${settings.optionBorderColor || "#CBD5E1"}`;
+      }
+      box.style.borderRadius = `${settings.optionCardRadius || 8}px`;
+      box.style.padding = `${settings.optionCardPadding || 8}px 14px`;
+
+      const circle = box.querySelector(".slide-opt-circle");
+      if (circle) {
+        if (settings.optionStyle === "clean") {
+          circle.style.background = "transparent";
+          circle.style.color = settings.optionTextColor || settings.hindiColor || "#FBBF24";
+          circle.textContent = `(${(opt.key || String.fromCharCode(65 + idx)).toLowerCase()})`;
+        } else {
+          circle.style.background = settings.optionBadgeBg || "#7A0000";
+          circle.style.color = settings.optionBadgeColor || "#FFFFFF";
+          circle.textContent = opt.key || String.fromCharCode(65 + idx);
+        }
+      }
+
+      const textEl = box.querySelector(".slide-opt-text");
+      if (textEl) {
+        textEl.style.color = settings.optionTextColor || (settings.optionStyle === "clean" && settings.theme === "dark" ? "#FFFFFF" : "#111111");
+        textEl.style.fontSize = `${settings.optionFontSize || 18}px`;
+        textEl.style.fontFamily = settings.optionFontFamily || settings.engFontFamily || "Segoe UI, Arial, sans-serif";
+        textEl.style.textAlign = settings.optionAlign || "left";
+        if (document.activeElement !== textEl) {
+          textEl.textContent = opt.text || "";
+        }
+      }
+    });
+  }
+
+  // Diagram / Image Containers with Transform & Dimensions (Multiple Images)
+  const imgList = getQuestionImages(activeQ);
+  canvasWrapper.querySelectorAll(".slide-image-container").forEach((imgContainer) => {
+    const imgId = imgContainer.dataset.imageId;
+    const imgObj = imgList.find((im) => (im.id || im) === imgId) || imgList[0];
+    if (imgObj) {
+      imgContainer.style.transform = `translate(${imgObj.posX || 0}px, ${imgObj.posY || 0}px)`;
+      imgContainer.style.width = `${imgObj.width || 260}px`;
+      imgContainer.style.height = `${imgObj.height || 200}px`;
+    }
+  });
+
+  // Footer Bar
+  const footerBar = canvasWrapper.querySelector(".slide-footer-bar");
+  if (footerBar) {
+    footerBar.style.display = settings.showFooter ? "flex" : "none";
+    footerBar.style.background = settings.footerBg || "#7A0000";
+    footerBar.style.color = settings.footerColor || "#FFFFFF";
+    footerBar.style.height = `${settings.footerHeight || 28}px`;
+    footerBar.style.fontSize = `${settings.footerFontSize || 13}px`;
+    footerBar.textContent = settings.footerText || "";
+  }
+
+  saveState(state);
+}
+
+async function handlePptExportPptx() {
+  ensurePptState();
+  const btn = app.querySelector('[data-action="ppt-export-pptx"]');
+  const originalText = btn ? btn.textContent : "";
+  if (btn) btn.textContent = "⏳ Generating .PPTX...";
+
+  try {
+    const filename = await exportQuestionsToPptx(state.ppt.questions, state.ppt.settings);
+    if (btn) btn.textContent = "✅ Downloaded!";
+    setTimeout(() => { if (btn) btn.textContent = originalText; }, 2500);
+  } catch (err) {
+    console.error(err);
+    alert("Error exporting PPTX: " + err.message);
+    if (btn) btn.textContent = originalText;
+  }
+}
+
+async function handlePptExportPdf(qualityMode) {
+  ensurePptState();
+  const btn = app.querySelector(`[data-action="ppt-export-pdf-${qualityMode}"]`);
+  const originalText = btn ? btn.textContent : "";
+  if (btn) btn.textContent = "⏳ Rendering PDF...";
+
+  try {
+    await exportQuestionsToPdf(state.ppt.questions, state.ppt.settings, qualityMode);
+    if (btn) btn.textContent = "✅ PDF Ready!";
+    setTimeout(() => { if (btn) btn.textContent = originalText; }, 2500);
+  } catch (err) {
+    console.error(err);
+    alert("Error exporting PDF: " + err.message);
+    if (btn) btn.textContent = originalText;
   }
 }
