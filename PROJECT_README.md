@@ -40,6 +40,15 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-24 - 100% WYSIWYG Live Preview to PDF/PPTX Export Synchronization Fix
+
+- **Perfect Alignment Match**:
+  - Fixed scaling calculation bug for `optionsPosX` and `examTagPosX` in PDF exporter and PPTX exporter (was erroneously dividing by 100).
+  - Synchronized `textAlign` ("left", "center", "right") and `optionAlign` across PDF canvas rendering and PPTX slides.
+  - Synchronized custom font families (`engFontFamily`, `hindiFontFamily`, `optionFontFamily`) and line heights across PDF and PPTX exporters.
+  - Multi-line question paragraphs with `\n` line breaks now wrap and render identically between live preview and exported PDF.
+  - Minimalist "Clean" digital board options `(a) text` are correctly exported in both PDF and PPTX.
+
 ### 2026-08-20 - "Apply to All Slides" Global Propagation Fix
 
 - **Instant Full Deck Propagation**:

@@ -12,6 +12,12 @@ function getQuestionImages(q) {
   return [];
 }
 
+function cleanFontFace(fontFamilyStr, fallback = "Segoe UI") {
+  if (!fontFamilyStr) return fallback;
+  const first = fontFamilyStr.split(",")[0].replace(/['"]/g, "").trim();
+  return first || fallback;
+}
+
 export async function exportQuestionsToPptx(questions, rawSettings) {
   if (!questions || !questions.length) {
     throw new Error("No questions to export.");
@@ -118,6 +124,12 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
     const engLinesEst = Math.max(1, Math.ceil(engText.length / 105));
     const engH = Math.min(2.0, engLinesEst * 0.38 + 0.15);
 
+    const textAlign = settings.textAlign || "left";
+    const engFontFace = cleanFontFace(settings.engFontFamily, "Segoe UI");
+    const hindiFontFace = cleanFontFace(settings.hindiFontFamily, "Mangal");
+    const optFontFace = cleanFontFace(settings.optionFontFamily || settings.engFontFamily, "Segoe UI");
+    const optAlign = settings.optionAlign || "left";
+
     // 2. English Question Body with individual Eng Pos X & Y and Width
     const engX = contentX + ((settings.engPosX || 0) / 72);
     const engY = currentY + ((settings.engPosY || 0) / 72);
@@ -129,10 +141,10 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
       w: engW,
       h: engH,
       fontSize: settings.engFontSize || 19,
-      fontFace: "Segoe UI",
+      fontFace: engFontFace,
       bold: true,
       color: cleanHex(settings.engColor || "#111111"),
-      align: "left",
+      align: textAlign,
       valign: "top",
       paraSpaceAfter: 4
     });
@@ -172,10 +184,10 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
       w: hindiW,
       h: hindiH,
       fontSize: settings.hindiFontSize || 18,
-      fontFace: "Mangal",
+      fontFace: hindiFontFace,
       bold: true,
       color: cleanHex(settings.hindiColor || "#7A0000"),
-      align: "left",
+      align: textAlign,
       valign: "top",
       paraSpaceAfter: 4
     });
@@ -185,7 +197,7 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
     // 4b. Standalone Exam Tag Badge (Below Hindi Question - SSC GD / YouTube Lecture Style)
     if (settings.examTagPosition === "below-question" || settings.examTagPosition === "above-options") {
       currentY += 0.12;
-      const examBadgeX = contentX + (SLIDE_W * ((settings.examTagPosX || 0) / 100));
+      const examBadgeX = contentX + ((settings.examTagPosX || 0) / 72);
       const examBadgeY = currentY + ((settings.examTagPosY || 0) / 72);
       const tagW = Math.min(contentW, Math.max(2.8, examText.length * 0.13 + 0.5));
       const tagH = 0.38;
@@ -247,21 +259,22 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
           valign: "middle"
         });
       }
-      currentY += tagH + 0.15;
+      currentY += tagH + 0.12;
     } else {
-      currentY += 0.25;
+      currentY += 0.14;
     }
 
-    // 4c. Slide Diagrams / Images (Independent Floating Layers - Multiple Images Support)
+    // 4b. Slide Diagrams / Graphs / Images Floating Layer (Support Multiple Images)
     const images = getQuestionImages(q);
     for (const img of images) {
       const imgDataUrl = typeof img === "string" ? img : img?.dataUrl;
       if (imgDataUrl) {
-        const imgWInches = ((img.width || 260) / 72);
-        const imgHInches = ((img.height || 180) / 72);
-        const imgXInches = 0.35 + ((img.posX || 0) / 72);
-        const imgYInches = headerH + 0.15 + ((img.posY || 0) / 72);
         try {
+          const imgWInches = (img.width || 260) / 72;
+          const imgHInches = (img.height || 200) / 72;
+          const imgXInches = (24 + (img.posX || 0)) / 72;
+          const imgYInches = headerH + (12 + (img.posY || 0)) / 72;
+
           slide.addImage({
             data: imgDataUrl,
             x: imgXInches,
@@ -281,7 +294,7 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
     const layout = settings.optionsLayout || "2-col";
     const maxOptLength = Math.max(...options.map((o) => (o.text || "").length), 6);
     const totalCardsW = contentW * ((settings.optionWidthPercent || 96) / 100);
-    const startX = contentX + (contentW - totalCardsW) / 2 + (SLIDE_W * ((settings.optionsPosX || 0) / 100));
+    const startX = contentX + (contentW - totalCardsW) / 2 + ((settings.optionsPosX || 0) / 72);
     const cardGapX = 0.32;
     const cardGapY = 0.16;
 
@@ -318,60 +331,77 @@ export async function exportQuestionsToPptx(questions, rawSettings) {
       const cX = startX + col * (cardW + cardGapX);
       const cY = optStartY + row * (cardH + cardGapY);
 
-      // Card Background Box
-      slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
-        x: cX,
-        y: cY,
-        w: cardW,
-        h: cardH,
-        rectRadius: 0.12,
-        fill: { color: cleanHex(settings.optionCardBg || "#FFFFFF") },
-        line: {
-          color: cleanHex(settings.optionBorderColor || "#CBD5E1"),
-          width: settings.optionCardBorderWidth || 1.5
-        }
-      });
+      if (settings.optionStyle !== "clean") {
+        // Card Background Box
+        slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
+          x: cX,
+          y: cY,
+          w: cardW,
+          h: cardH,
+          rectRadius: 0.12,
+          fill: { color: cleanHex(settings.optionCardBg || "#FFFFFF") },
+          line: {
+            color: cleanHex(settings.optionBorderColor || "#CBD5E1"),
+            width: settings.optionCardBorderWidth || 1.5
+          }
+        });
 
-      // Option Letter Badge (Circle / Pill)
-      const optBadgeSize = Math.min(0.52, cardH * 0.68);
-      const optBadgeY = cY + (cardH - optBadgeSize) / 2;
-      const optBadgeX = cX + 0.14;
+        // Option Letter Badge (Circle / Pill)
+        const optBadgeSize = Math.min(0.52, cardH * 0.68);
+        const optBadgeY = cY + (cardH - optBadgeSize) / 2;
+        const optBadgeX = cX + 0.14;
 
-      slide.addShape(pptx.shapes.OVAL, {
-        x: optBadgeX,
-        y: optBadgeY,
-        w: optBadgeSize,
-        h: optBadgeSize,
-        fill: { color: cleanHex(settings.optionBadgeBg || "#7A0000") },
-        line: { type: "none" }
-      });
+        slide.addShape(pptx.shapes.OVAL, {
+          x: optBadgeX,
+          y: optBadgeY,
+          w: optBadgeSize,
+          h: optBadgeSize,
+          fill: { color: cleanHex(settings.optionBadgeBg || "#7A0000") },
+          line: { type: "none" }
+        });
 
-      slide.addText(opt.key || String.fromCharCode(65 + optIdx), {
-        x: optBadgeX,
-        y: optBadgeY,
-        w: optBadgeSize,
-        h: optBadgeSize,
-        fontSize: 16,
-        fontFace: "Segoe UI",
-        bold: true,
-        color: cleanHex(settings.optionBadgeColor || "#FFFFFF"),
-        align: "center",
-        valign: "middle"
-      });
+        slide.addText(opt.key || String.fromCharCode(65 + optIdx), {
+          x: optBadgeX,
+          y: optBadgeY,
+          w: optBadgeSize,
+          h: optBadgeSize,
+          fontSize: 16,
+          fontFace: "Segoe UI",
+          bold: true,
+          color: cleanHex(settings.optionBadgeColor || "#FFFFFF"),
+          align: "center",
+          valign: "middle"
+        });
 
-      // Option Text
-      slide.addText(opt.text || "", {
-        x: optBadgeX + optBadgeSize + 0.14,
-        y: cY,
-        w: cardW - (optBadgeSize + 0.38),
-        h: cardH,
-        fontSize: settings.optionFontSize || 18,
-        fontFace: "Segoe UI",
-        bold: true,
-        color: cleanHex(settings.optionTextColor || "#111111"),
-        align: "left",
-        valign: "middle"
-      });
+        // Option Text
+        slide.addText(opt.text || "", {
+          x: optBadgeX + optBadgeSize + 0.14,
+          y: cY,
+          w: cardW - (optBadgeSize + 0.38),
+          h: cardH,
+          fontSize: settings.optionFontSize || 18,
+          fontFace: optFontFace,
+          bold: true,
+          color: cleanHex(settings.optionTextColor || "#111111"),
+          align: optAlign,
+          valign: "middle"
+        });
+      } else {
+        // Clean Minimalist Option (a) Text
+        const keyText = `(${(opt.key || String.fromCharCode(65 + optIdx)).toLowerCase()}) `;
+        slide.addText(keyText + (opt.text || ""), {
+          x: cX + 0.08,
+          y: cY,
+          w: cardW - 0.16,
+          h: cardH,
+          fontSize: settings.optionFontSize || 18,
+          fontFace: optFontFace,
+          bold: true,
+          color: cleanHex(settings.optionTextColor || settings.hindiColor || "#FBBF24"),
+          align: optAlign,
+          valign: "middle"
+        });
+      }
     });
 
     // 6. Optional Footer Bar

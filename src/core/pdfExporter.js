@@ -113,19 +113,34 @@ async function renderSlideToCanvas(ctx, q, index, rawSettings, W, H) {
   const maxContentW = Math.round((W * (widthPercent / 100) - 56 * scale));
   let currentY = headerH + (settings.questionPadding || 16) * scale;
 
+  const textAlign = settings.textAlign || "left";
+  const engFontFamily = settings.engFontFamily || "Segoe UI, Arial, sans-serif";
+  const hindiFontFamily = settings.hindiFontFamily || "Mangal, Noto Sans Devanagari, Nirmala UI, Arial, sans-serif";
+  const optFontFamily = settings.optionFontFamily || engFontFamily;
+  const optAlign = settings.optionAlign || "left";
+  const lineHeightMult = settings.lineHeight || 1.36;
+
   // 2. English Question with individual Eng Pos X & Y and Width
   const engX = marginX + Math.round((settings.engPosX || 0) * scale);
   let engY = currentY + Math.round((settings.engPosY || 0) * scale);
   const engContentW = Math.round(maxContentW * ((settings.engWidth || 100) / 100));
   ctx.fillStyle = settings.engColor || "#111111";
   const engFontSize = Math.round((settings.engFontSize || 19) * scale);
-  ctx.font = `bold ${engFontSize}px "Segoe UI", Arial, sans-serif`;
-  ctx.textAlign = "left";
+  ctx.font = `bold ${engFontSize}px ${engFontFamily}`;
+  ctx.textAlign = textAlign;
   ctx.textBaseline = "top";
-  const engLineHeight = engFontSize * 1.35;
+  const engLineHeight = engFontSize * lineHeightMult;
   const engLines = wrapCanvasText(ctx, q.english || "", engContentW);
+
+  let engDrawX = engX;
+  if (textAlign === "center") {
+    engDrawX = engX + engContentW / 2;
+  } else if (textAlign === "right") {
+    engDrawX = engX + engContentW;
+  }
+
   engLines.forEach((line) => {
-    ctx.fillText(line, engX, engY);
+    ctx.fillText(line, engDrawX, engY);
     engY += engLineHeight;
   });
 
@@ -151,13 +166,21 @@ async function renderSlideToCanvas(ctx, q, index, rawSettings, W, H) {
   const hindiContentW = Math.round(maxContentW * ((settings.hindiWidth || 100) / 100));
   ctx.fillStyle = settings.hindiColor || "#7A0000";
   const hindiFontSize = Math.round((settings.hindiFontSize || 18) * scale);
-  ctx.font = `bold ${hindiFontSize}px "Mangal", "Noto Sans Devanagari", "Nirmala UI", Arial, sans-serif`;
-  ctx.textAlign = "left";
+  ctx.font = `bold ${hindiFontSize}px ${hindiFontFamily}`;
+  ctx.textAlign = textAlign;
   ctx.textBaseline = "top";
-  const hindiLineHeight = hindiFontSize * 1.38;
+  const hindiLineHeight = hindiFontSize * (lineHeightMult * 1.02);
   const hindiLines = wrapCanvasText(ctx, q.hindi || "", hindiContentW);
+
+  let hindiDrawX = hindiX;
+  if (textAlign === "center") {
+    hindiDrawX = hindiX + hindiContentW / 2;
+  } else if (textAlign === "right") {
+    hindiDrawX = hindiX + hindiContentW;
+  }
+
   hindiLines.forEach((line) => {
-    ctx.fillText(line, hindiX, hindiY);
+    ctx.fillText(line, hindiDrawX, hindiY);
     hindiY += hindiLineHeight;
   });
 
@@ -166,7 +189,7 @@ async function renderSlideToCanvas(ctx, q, index, rawSettings, W, H) {
   // 4b. Standalone Exam Tag Badge (Below Hindi Question - SSC GD / YouTube Lecture Style)
   if (settings.examTagPosition === "below-question" || settings.examTagPosition === "above-options") {
     currentY += 8 * scale;
-    const examBadgeX = marginX + Math.round(W * ((settings.examTagPosX || 0) / 100));
+    const examBadgeX = marginX + Math.round((settings.examTagPosX || 0) * scale);
     const examBadgeY = currentY + Math.round((settings.examTagPosY || 0) * scale);
     const tagFontSize = Math.round((settings.examFontSize || 15) * scale);
     ctx.font = `bold ${tagFontSize}px "Segoe UI", Arial, sans-serif`;
@@ -222,7 +245,7 @@ async function renderSlideToCanvas(ctx, q, index, rawSettings, W, H) {
   const cardGapX = (settings.optionGap || 12) * scale * 1.5;
   const cardGapY = (settings.optionGap || 12) * scale;
   const totalCardsW = maxContentW * ((settings.optionWidthPercent || 96) / 100);
-  const startCardX = marginX + (maxContentW - totalCardsW) / 2 + Math.round(W * ((settings.optionsPosX || 0) / 100));
+  const startCardX = marginX + (maxContentW - totalCardsW) / 2 + Math.round((settings.optionsPosX || 0) * scale);
 
   let cardW, totalRows, cardH;
   if (layout === "1-col") {
@@ -287,19 +310,35 @@ async function renderSlideToCanvas(ctx, q, index, rawSettings, W, H) {
       // Option Text
       ctx.fillStyle = settings.optionTextColor || "#111111";
       const optFontSize = Math.round((settings.optionFontSize || 18) * scale);
-      ctx.font = `bold ${optFontSize}px "Segoe UI", "Mangal", Arial, sans-serif`;
-      ctx.textAlign = "left";
+      ctx.font = `bold ${optFontSize}px ${optFontFamily}`;
+      ctx.textAlign = optAlign;
       ctx.textBaseline = "middle";
-      ctx.fillText(opt.text || "", bX + badgeD + 12 * scale, cY + cardH / 2);
+
+      let optTextX = bX + badgeD + 12 * scale;
+      if (optAlign === "center") {
+        optTextX = cX + cardW / 2 + (badgeD + 12 * scale) / 2;
+      } else if (optAlign === "right") {
+        optTextX = cX + cardW - 14 * scale;
+      }
+
+      ctx.fillText(opt.text || "", optTextX, cY + cardH / 2);
     } else {
       // Clean Digital Board Minimalist Option: (a) 52,200
       ctx.fillStyle = settings.optionTextColor || settings.hindiColor || "#FBBF24";
       const optFontSize = Math.round((settings.optionFontSize || 18) * scale);
-      ctx.font = `bold ${optFontSize}px "Segoe UI", "Mangal", Arial, sans-serif`;
-      ctx.textAlign = "left";
+      ctx.font = `bold ${optFontSize}px ${optFontFamily}`;
+      ctx.textAlign = optAlign;
       ctx.textBaseline = "middle";
       const keyText = `(${(opt.key || String.fromCharCode(65 + optIdx)).toLowerCase()}) `;
-      ctx.fillText(keyText + (opt.text || ""), cX + 6 * scale, cY + cardH / 2);
+
+      let optTextX = cX + 6 * scale;
+      if (optAlign === "center") {
+        optTextX = cX + cardW / 2;
+      } else if (optAlign === "right") {
+        optTextX = cX + cardW - 6 * scale;
+      }
+
+      ctx.fillText(keyText + (opt.text || ""), optTextX, cY + cardH / 2);
     }
   });
 
@@ -331,22 +370,31 @@ function roundRect(ctx, x, y, w, h, r) {
 
 function wrapCanvasText(ctx, text, maxWidth) {
   if (!text) return [];
-  const words = text.split(" ");
-  const lines = [];
-  let currentLine = "";
+  const paragraphs = String(text).split("\n");
+  const allLines = [];
 
-  for (let i = 0; i < words.length; i += 1) {
-    const testLine = currentLine ? `${currentLine} ${words[i]}` : words[i];
-    const testWidth = ctx.measureText(testLine).width;
-    if (testWidth > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = words[i];
-    } else {
-      currentLine = testLine;
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      allLines.push("");
+      continue;
     }
+    const words = para.split(" ");
+    let currentLine = "";
+
+    for (let i = 0; i < words.length; i += 1) {
+      const word = words[i];
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = ctx.measureText(testLine).width;
+      if (testWidth > maxWidth && currentLine) {
+        allLines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) allLines.push(currentLine);
   }
-  if (currentLine) lines.push(currentLine);
-  return lines;
+  return allLines;
 }
 
 function canvasToJpegBytes(canvas, quality) {
