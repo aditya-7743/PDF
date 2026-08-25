@@ -17,29 +17,29 @@ export function renderRibbonInsert(state, settings) {
         <div class="ppt-fs-ribbon-group-title">Media & Diagrams</div>
       </div>
 
-      <!-- Math Formulas & LaTeX Palette Group -->
+      <!-- Math Formulas & Symbols Palette Group -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:grid; grid-template-columns:repeat(10, auto); gap:2px;">
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\frac{a}{b}" title="Fraction: \\frac{a}{b}">a/b</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\sqrt{x}" title="Square Root: \\sqrt{x}">√x</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="^{2}" title="Power: x²">x²</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="_{1}" title="Subscript: x₁">x₁</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\left( | \\right)" title="Auto Bracket: ( )">( )</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\pm" title="Plus-Minus: \\pm">±</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\times" title="Multiply: \\times">×</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\div" title="Divide: \\div">÷</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\pi" title="Pi: \\pi">π</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\theta" title="Theta: \\theta">θ</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\approx" title="Approximately: \\approx">≈</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\le" title="Less than equal: \\le">≤</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\ge" title="Greater than equal: \\ge">≥</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\neq" title="Not equal: \\neq">≠</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="^\\circ" title="Degree: ^\\circ">°</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\Delta" title="Delta: \\Delta">Δ</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\sum" title="Summation: \\sum">∑</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\int" title="Integral: \\int">∫</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\infty" title="Infinity: \\infty">∞</button>
-          <button class="ppt-fs-math-btn" data-ppt-latex="\\angle" title="Angle: \\angle">∠</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="²" title="Superscript 2: ²">x²</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="³" title="Superscript 3: ³">x³</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="₁" title="Subscript 1: ₁">x₁</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="₂" title="Subscript 2: ₂">x₂</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="√" title="Square Root: √">√</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∛" title="Cube Root: ∛">∛</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="±" title="Plus-Minus: ±">±</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="×" title="Multiply: ×">×</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="÷" title="Divide: ÷">÷</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="°" title="Degree: °">°</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="π" title="Pi: π">π</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="θ" title="Theta: θ">θ</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≈" title="Approximately: ≈">≈</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≤" title="Less than equal: ≤">≤</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≥" title="Greater than equal: ≥">≥</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≠" title="Not equal: ≠">≠</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="Δ" title="Delta: Δ">Δ</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∑" title="Summation: ∑">∑</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∞</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∠" title="Angle: ∠">∠</button>
         </div>
         <div class="ppt-fs-ribbon-group-title">Symbols & Math Formulas</div>
       </div>
