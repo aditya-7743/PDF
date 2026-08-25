@@ -186,27 +186,31 @@ export function renderExportModalHtml(state) {
 
             <!-- 3. Mode Specific Inputs -->
             ${exp.scope === 'sets' ? `
-              <div class="ppt-export-section" style="background:#161b22; padding:8px 10px; border-radius:6px; border:1px solid #30363d;">
-                <label class="ppt-export-label" style="color:#58a6ff;">⚙️ Batch Sets Settings</label>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:4px;">
+              <div class="ppt-export-section" style="background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid #cbd5e1;">
+                <label class="ppt-export-label" style="color:#2563eb; display:flex; align-items:center; gap:6px;">⚙️ Batch Sets Settings</label>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; margin-top:6px;">
                   <div>
-                    <span style="font-size:11px; color:#c9d1d9; display:block; margin-bottom:2px;">Questions Per Set:</span>
-                    <input type="number" class="ppt-fs-input-num" data-ppt-export-field="chunkSize" value="${exp.chunkSize || 25}" min="1" max="100" style="width:100%; box-sizing:border-box;" />
+                    <span style="font-size:11px; font-weight:600; color:#334155; display:block; margin-bottom:3px;">Questions / Set:</span>
+                    <input type="number" class="ppt-fs-input-num" data-ppt-export-field="chunkSize" value="${exp.chunkSize || 25}" min="1" max="100" style="width:100%; box-sizing:border-box; padding:4px 6px;" />
                   </div>
                   <div>
-                    <span style="font-size:11px; color:#c9d1d9; display:block; margin-bottom:2px;">Mandatory Intro Pages:</span>
-                    <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatoryPrefix" value="${escapeHtml(exp.mandatoryPrefix || '1, 2')}" placeholder="1, 2" style="width:100%; box-sizing:border-box;" title="Pages included at the start of EVERY generated set PDF (e.g. 1, 2 for Thumbnail & WhatsApp QR)" />
+                    <span style="font-size:11px; font-weight:600; color:#334155; display:block; margin-bottom:3px;">Intro Pages (Start):</span>
+                    <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatoryPrefix" value="${escapeHtml(exp.mandatoryPrefix || '')}" placeholder="e.g. 1, 2" style="width:100%; box-sizing:border-box; padding:4px 6px;" title="Slides to add at the START of every set (e.g. 1, 2)" />
+                  </div>
+                  <div>
+                    <span style="font-size:11px; font-weight:600; color:#334155; display:block; margin-bottom:3px;">Exit Pages (End):</span>
+                    <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatorySuffix" value="${escapeHtml(exp.mandatorySuffix || '')}" placeholder="e.g. 2, 7" style="width:100%; box-sizing:border-box; padding:4px 6px;" title="Slides to add at the END of every set (e.g. Slide 2 or Slide 7)" />
                   </div>
                 </div>
-                <div style="font-size:10px; color:#8b949e; margin-top:4px;">
-                  💡 <i>Example: Slides 1, 2 will be added automatically to Set 1 (Q1-25), Set 2 (Q26-50), etc.</i>
+                <div style="font-size:10.5px; color:#64748b; margin-top:6px; line-height:1.4;">
+                  💡 <i><b>Intro Slides</b> start me add honge, aur <b>Exit Slides</b> last me add honge. Intro wale slides ko exit me bhi add kar sakte hain.</i>
                 </div>
               </div>
             ` : exp.scope === 'range' ? `
-              <div class="ppt-export-section" style="background:#161b22; padding:8px 10px; border-radius:6px; border:1px solid #30363d;">
-                <label class="ppt-export-label" style="color:#58a6ff;">🎯 Enter Specific Pages / Ranges</label>
-                <input type="text" class="ppt-fs-input-text" data-ppt-export-field="customRange" value="${escapeHtml(exp.customRange || '1, 2, 51-75')}" placeholder="e.g. 1, 2, 51-75" style="width:100%; margin-top:4px; box-sizing:border-box; font-size:12px;" />
-                <div style="font-size:10px; color:#8b949e; margin-top:4px;">
+              <div class="ppt-export-section" style="background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid #cbd5e1;">
+                <label class="ppt-export-label" style="color:#2563eb;">🎯 Enter Specific Pages / Ranges</label>
+                <input type="text" class="ppt-fs-input-text" data-ppt-export-field="customRange" value="${escapeHtml(exp.customRange || '1, 2, 51-75')}" placeholder="e.g. 1, 2, 51-75" style="width:100%; margin-top:4px; box-sizing:border-box; font-size:12px; padding:4px 6px;" />
+                <div style="font-size:10px; color:#64748b; margin-top:4px;">
                   Supports individual slides & ranges (e.g. <code>1, 2, 5-20, 51-75</code>)
                 </div>
               </div>
@@ -215,9 +219,9 @@ export function renderExportModalHtml(state) {
             <!-- 4. File Naming Pattern -->
             <div class="ppt-export-section">
               <label class="ppt-export-label">3. File Name Template</label>
-              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="fileNamePattern" value="${escapeHtml(exp.fileNamePattern || `${topicName}_Set_{set}_Q{start}-Q{end}`)}" style="width:100%; box-sizing:border-box; font-size:12px;" />
-              <div style="display:flex; gap:4px; margin-top:4px; font-size:10px; color:#8b949e;">
-                <span>Click token:</span>
+              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="fileNamePattern" value="${escapeHtml(exp.fileNamePattern || `${topicName}_Set_{set}_Q{start}-Q{end}`)}" style="width:100%; box-sizing:border-box; font-size:12px; padding:4px 6px;" />
+              <div style="display:flex; gap:4px; margin-top:4px; font-size:10px; color:#64748b;">
+                <span style="font-weight:600;">Click token:</span>
                 <button class="ppt-export-token-chip" data-action="ppt-insert-token" data-token="{set}">{set}</button>
                 <button class="ppt-export-token-chip" data-action="ppt-insert-token" data-token="{start}">{start}</button>
                 <button class="ppt-export-token-chip" data-action="ppt-insert-token" data-token="{end}">{end}</button>
@@ -229,7 +233,7 @@ export function renderExportModalHtml(state) {
           <!-- Right Column: Calculated Sets & Download Actions -->
           <div class="ppt-export-col-preview">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <h3 style="margin:0; font-size:13px; font-weight:700; color:#f0f6fc;">
+              <h3 style="margin:0; font-size:13px; font-weight:700; color:#0f172a;">
                 ${exp.scope === 'sets' ? `Generated Sets (${calculatedSets.length} Sets Total)` : `Export Preview`}
               </h3>
               ${exp.scope === 'sets' ? `
@@ -262,7 +266,7 @@ export function renderExportModalHtml(state) {
                         📄 <b>${escapeHtml(targetFileName)}.pdf</b>
                       </div>
                       <div class="ppt-export-set-subdetail">
-                        Includes: ${s.prefixCount ? `Intro Slides (${exp.mandatoryPrefix}) + ` : ''}Questions (${s.startQNum} to ${s.endQNum})
+                        Includes: ${s.prefixCount ? `Intro (${exp.mandatoryPrefix}) + ` : ''}Questions (${s.startQNum} to ${s.endQNum})${s.suffixCount ? ` + Exit (${exp.mandatorySuffix})` : ''}
                       </div>
                     </div>
                     <div class="ppt-export-set-actions">
@@ -276,7 +280,7 @@ export function renderExportModalHtml(state) {
                   </div>
                 `;
               }).join("") : `
-                <div style="padding:16px; text-align:center; background:#161b22; border-radius:6px; border:1px solid #30363d;">
+                <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
                   <div style="font-size:32px; margin-bottom:8px;">📄</div>
                   <h4 style="margin:0 0 4px 0; color:#f0f6fc; font-size:14px;">
                     ${exp.scope === 'range' ? `Custom Range: ${escapeHtml(exp.customRange || 'All')}` : `All Slides (1 to ${totalSlides})`}

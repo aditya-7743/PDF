@@ -22,19 +22,15 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
 
       <!-- Slides Group -->
       <div class="ppt-fs-ribbon-group">
-        <div class="ppt-fs-ribbon-group-content" style="display:flex; align-items:center; gap:4px;">
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-add-slide" title="Add Question Slide (+)" style="font-weight:700;">
-              ➕ New Slide
-            </button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-add-blank-slide" title="Add 100% Pure White Blank Slide" style="background:#ffffff; color:#111111; font-weight:700; border:1.5px solid #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,0.15);">
-              📄 Blank Slide
-            </button>
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
+          <div style="display:flex; gap:3px;">
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-add-slide" title="Add Question Slide (+)">➕ New Slide</button>
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-add-blank-slide" title="Add 100% Pure White Blank Slide">📄 Blank Slide</button>
           </div>
-          <div style="display:flex; flex-direction:column; gap:2px;">
+          <div style="display:flex; gap:3px;">
             <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-duplicate-slide" title="Duplicate Active Slide">📑 Duplicate</button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-delete-slide" title="Delete Active Slide" style="color:#f85149;">🗑️ Delete</button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-slide-to-all" title="Apply style to all slides" style="color:#58a6ff;">🚀 Apply All</button>
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-delete-slide" title="Delete Active Slide">🗑️ Delete</button>
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-slide-to-all" title="Apply style to all slides">🚀 Apply All</button>
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">Slides</div>
@@ -42,10 +38,10 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
 
       <!-- Font Group -->
       <div class="ppt-fs-ribbon-group">
-        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:4px;">
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <!-- Font Family & Font Size -->
           <div style="display:flex; align-items:center; gap:3px;">
-            <select class="ppt-fs-select" data-ppt-tb-action="fontFamily" title="Font Family" style="width:125px;">
+            <select class="ppt-fs-select" data-ppt-tb-action="fontFamily" title="Font Family" style="width:115px;">
               <option value="Segoe UI, Arial, sans-serif"${currentFont.includes("Segoe") ? " selected" : ""}>Segoe UI</option>
               <option value="'Mangal', 'Noto Sans Devanagari', sans-serif"${currentFont.includes("Mangal") ? " selected" : ""}>Mangal (Hindi)</option>
               <option value="'Times New Roman', serif"${currentFont.includes("Times") ? " selected" : ""}>Times New Roman</option>
@@ -60,16 +56,16 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
           </div>
 
           <!-- Bold, Italic, Underline, Colors -->
-          <div style="display:flex; align-items:center; gap:2px;">
+          <div style="display:flex; align-items:center; gap:3px;">
             <button class="ppt-fs-btn-icon" data-ppt-tb-format="bold" title="Bold (Ctrl+B)"><b>B</b></button>
             <button class="ppt-fs-btn-icon" data-ppt-tb-format="italic" title="Italic (Ctrl+I)"><i>I</i></button>
             <button class="ppt-fs-btn-icon" data-ppt-tb-format="underline" title="Underline (Ctrl+U)"><u>U</u></button>
             <label class="ppt-fs-color-picker" title="Text Color">
-              <span style="border-bottom:3px solid #58a6ff; line-height:1; font-weight:bold;">A</span>
+              <span style="border-bottom:2.5px solid #000000; line-height:1; font-weight:900;">A</span>
               <input type="color" data-ppt-tb-color="textColor" value="${escapeHtml(textColor)}" />
             </label>
             <label class="ppt-fs-color-picker" title="Highlight Color">
-              <span style="background:#e3b341; color:#000; padding:1px 3px; border-radius:2px; font-size:10px; font-weight:bold;">H</span>
+              <span style="background:#000000; color:#ffffff; padding:0 2px; border-radius:2px; font-size:9px; font-weight:900;">H</span>
               <input type="color" data-ppt-tb-color="highlightColor" value="${escapeHtml(highlightColor)}" />
             </label>
             <button class="ppt-fs-btn-icon" data-ppt-tb-action="clear-format" title="Clear Formatting (Tx)">Tx</button>
@@ -97,7 +93,7 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18v2H3V4zm0 5h18v2H3V9zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
             </button>
 
-            <span style="display:inline-block; width:1px; height:18px; background:#30363d; margin:0 3px;"></span>
+            <span style="display:inline-block; width:1px; height:18px; background:#000000; margin:0 3px;"></span>
 
             <!-- Vertical Alignment -->
             <button class="ppt-fs-btn-icon ${(settings.valign || 'top') === 'top' ? 'is-active' : ''}" data-ppt-tb-action="valign-top" title="Top Align">
@@ -114,7 +110,7 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
           <!-- Row 2: Line Spacing, Lists, Indents, Clean Math -->
           <div style="display:flex; align-items:center; gap:2px;">
             <!-- Line Height Dropdown -->
-            <select class="ppt-fs-select" data-ppt-tb-action="lineHeight" title="Line & Paragraph Spacing" style="width:74px; font-size:10px; padding:1px 3px;">
+            <select class="ppt-fs-select" data-ppt-tb-action="lineHeight" title="Line & Paragraph Spacing" style="width:68px; font-size:10px; padding:1px 3px;">
               <option value="1.0"${String(settings.lineHeight) === "1" ? " selected" : ""}>↕ 1.0</option>
               <option value="1.15"${String(settings.lineHeight) === "1.15" ? " selected" : ""}>↕ 1.15</option>
               <option value="1.25"${String(settings.lineHeight) === "1.25" ? " selected" : ""}>↕ 1.25</option>
@@ -124,7 +120,7 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
               <option value="2.0"${String(settings.lineHeight) === "2" ? " selected" : ""}>↕ 2.0</option>
             </select>
 
-            <span style="display:inline-block; width:1px; height:18px; background:#30363d; margin:0 2px;"></span>
+            <span style="display:inline-block; width:1px; height:18px; background:#000000; margin:0 2px;"></span>
 
             <!-- Bulleted List -->
             <button class="ppt-fs-btn-icon" data-ppt-tb-action="bullet-list" title="Bulleted List">
@@ -144,15 +140,42 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M11 4h10v2H11V4zm0 5h10v2H11V9zm0 5h10v2H11v-2zm0 5h10v2H11v-2zM3 8l4 4-4 4V8z"/></svg>
             </button>
 
-            <span style="display:inline-block; width:1px; height:18px; background:#30363d; margin:0 2px;"></span>
+            <span style="display:inline-block; width:1px; height:18px; background:#000000; margin:0 2px;"></span>
 
             <!-- Clean Math Spacing -->
-            <button class="ppt-fs-btn-icon" data-ppt-tb-action="clean-math" title="Auto Fix Formula & Math Operators Spacing (+, −, ×, ÷, =)" style="color:#58a6ff;">
+            <button class="ppt-fs-btn-icon" data-ppt-tb-action="clean-math" title="Auto Fix Formula & Math Operators Spacing (+, −, ×, ÷, =)">
               ✨
             </button>
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">Paragraph & Alignment</div>
+      </div>
+
+      <!-- Math Formulas & Symbols Palette Group -->
+      <div class="ppt-fs-ribbon-group">
+        <div class="ppt-fs-ribbon-group-content" style="display:grid; grid-template-columns:repeat(10, 24px); gap:2px;">
+          <button class="ppt-fs-math-btn" data-ppt-latex="²" title="Superscript 2: ²">x²</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="³" title="Superscript 3: ³">x³</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="₁" title="Subscript 1: ₁">x₁</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="₂" title="Subscript 2: ₂">x₂</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="√" title="Square Root: √">√</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∛" title="Cube Root: ∛">∛</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="±" title="Plus-Minus: ±">±</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="×" title="Multiply: ×">×</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="÷" title="Divide: ÷">÷</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="°" title="Degree: °">°</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="π" title="Pi: π">π</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="θ" title="Theta: θ">θ</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≈" title="Approximately: ≈">≈</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≤" title="Less than equal: ≤">≤</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≥" title="Greater than equal: ≥">≥</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="≠" title="Not equal: ≠">≠</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="Δ" title="Delta: Δ">Δ</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∑" title="Summation: ∑">∑</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∞" title="Infinity: ∞">∞</button>
+          <button class="ppt-fs-math-btn" data-ppt-latex="∠" title="Angle: ∠">∠</button>
+        </div>
+        <div class="ppt-fs-ribbon-group-title">Symbols & Math Formulas</div>
       </div>
 
       <!-- Quick Export Group -->

@@ -199,32 +199,17 @@ export const sampleQuestions = [
   {
     id: "q_1",
     number: "Q.1",
-    topic: "RATIO & PROPORTION",
-    exam: "SSC CGL 12/09/2025 (Shift 2)",
-    english: "The number of red, blue, and green marbles in a bag is in the ratio 3 : 4 : 6. If 25 red marbles, 15 blue marbles, and an unknown number of green marbles are added to the bag, the ratio of red, blue, and green marbles becomes 4 : 5 : 9. Determine the number of green marbles added.",
-    hindi: "एक बैग में लाल, नीले और हरे कंचों की संख्या का अनुपात 3 : 4 : 6 है। यदि बैग में 25 लाल कंचे, 15 नीले कंचे और अज्ञात संख्या में हरे कंचे जोड़े जाते हैं, तो लाल, नीले और हरे कंचों का अनुपात 4 : 5 : 9 हो जाता है। जोड़े गए हरे कंचों की संख्या ज्ञात कीजिए।",
+    topic: "TOPIC",
+    exam: "",
+    english: "",
+    hindi: "",
     options: [
-      { key: "A", text: "103" },
-      { key: "B", text: "110" },
-      { key: "C", text: "107" },
-      { key: "D", text: "105" }
+      { key: "A", text: "" },
+      { key: "B", text: "" },
+      { key: "C", text: "" },
+      { key: "D", text: "" }
     ],
-    answer: "B"
-  },
-  {
-    id: "q_2",
-    number: "Q.2",
-    topic: "PARTNERSHIP",
-    exam: "SSC CGL 12/09/2025 (Shift 1)",
-    english: "Sonu started a business by investing ₹40,000. After 4 months, Prem joined with ₹80,000. At the end of 8 months from the start, Alok joined with ₹1,20,000. If the total profit is ₹1,56,000 at the end of the year, find the share of Alok.",
-    hindi: "सोनू ने ₹40,000 का निवेश करके एक व्यवसाय शुरू किया। 4 महीने बाद, प्रेम ₹80,000 के साथ शामिल हुआ। शुरुआत से 8 महीने के अंत में, आलोक ₹1,20,000 के साथ शामिल हुआ। यदि वर्ष के अंत में कुल लाभ ₹1,56,000 है, तो आलोक का हिस्सा ज्ञात कीजिए।",
-    options: [
-      { key: "A", text: "₹47,500" },
-      { key: "B", text: "₹48,000" },
-      { key: "C", text: "₹47,200" },
-      { key: "D", text: "₹46,800" }
-    ],
-    answer: "B"
+    answer: ""
   }
 ];
 

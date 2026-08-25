@@ -1,17 +1,17 @@
 // Fullscreen PPT Slide Workbench UI
-import { getSlideSettings } from "../../pptBranch.js";
-import { escapeHtml } from "./ribbon/ribbonCommon.js";
-import { renderRibbonHome } from "./ribbon/ribbonHome.js";
-import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js";
-import { renderRibbonEditor } from "./ribbon/ribbonEditor.js";
-import { renderRibbonInsert } from "./ribbon/ribbonInsert.js";
-import { renderRibbonDesign } from "./ribbon/ribbonDesign.js";
-import { renderRibbonExport } from "./ribbon/ribbonExport.js";
-import { renderRibbonView } from "./ribbon/ribbonView.js";
-import { renderSlideThumbnails } from "./components/slideThumbnails.js";
-import { renderSlideCanvas } from "./components/slideCanvas.js";
-import { renderStatusBar } from "./components/statusBar.js";
-import { renderExportModalHtml } from "./components/exportModal.js";
+import { getSlideSettings } from "../../pptBranch.js?v=83";
+import { escapeHtml } from "./ribbon/ribbonCommon.js?v=83";
+import { renderRibbonHome } from "./ribbon/ribbonHome.js?v=83";
+import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js?v=83";
+import { renderRibbonEditor } from "./ribbon/ribbonEditor.js?v=83";
+import { renderRibbonInsert } from "./ribbon/ribbonInsert.js?v=83";
+import { renderRibbonDesign } from "./ribbon/ribbonDesign.js?v=83";
+import { renderRibbonExport } from "./ribbon/ribbonExport.js?v=83";
+import { renderRibbonView } from "./ribbon/ribbonView.js?v=83";
+import { renderSlideThumbnails } from "./components/slideThumbnails.js?v=83";
+import { renderSlideCanvas } from "./components/slideCanvas.js?v=83";
+import { renderStatusBar } from "./components/statusBar.js?v=83";
+import { renderExportModalHtml } from "./components/exportModal.js?v=83";
 
 export function renderPptFullscreenOverlay(state) {
   const ppt = state.ppt || {};

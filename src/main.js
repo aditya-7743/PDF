@@ -142,6 +142,21 @@ function loadInitialState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return blankState;
     const parsed = JSON.parse(raw);
+    let pptQuestions = parsed.ppt?.questions;
+    if (Array.isArray(pptQuestions) && pptQuestions.length) {
+      pptQuestions = pptQuestions.filter((q) => {
+        const eng = (q.english || "").toLowerCase();
+        const hin = (q.hindi || "").toLowerCase();
+        if (eng.includes("sonu started a business") || hin.includes("सोनू ने") || eng.includes("marbles in a bag") || hin.includes("कंचों की संख्या")) {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (!pptQuestions || !pptQuestions.length) {
+      pptQuestions = JSON.parse(JSON.stringify(blankState.ppt.questions));
+    }
+
     return {
       ...blankState,
       ...parsed,
@@ -150,7 +165,7 @@ function loadInitialState() {
         ...blankState.ppt,
         ...(parsed.ppt || {}),
         settings: { ...blankState.ppt.settings, ...(parsed.ppt?.settings || {}) },
-        questions: parsed.ppt?.questions?.length ? parsed.ppt.questions : blankState.ppt.questions
+        questions: pptQuestions
       }
     };
   } catch (err) {
@@ -241,9 +256,32 @@ function handleGlobalPaste(event) {
 
 function render() {
   if (!app) return;
+
+  // Preserve scroll positions of key UI elements before rebuilding HTML
+  const fsSidebar = app.querySelector(".ppt-fs-thumbnails-sidebar");
+  const fsSidebarScrollTop = fsSidebar ? fsSidebar.scrollTop : null;
+
+  const embeddedSidebar = app.querySelector(".ppt-slide-sidebar") || app.querySelector(".ppt-slides-strip");
+  const embeddedSidebarScrollTop = embeddedSidebar ? (embeddedSidebar.scrollTop || embeddedSidebar.scrollLeft) : null;
+
   state.mode = normalizeAppMode(state.mode);
   app.innerHTML = renderApp(state);
   bindEvents();
+
+  if (fsSidebarScrollTop !== null) {
+    const newFsSidebar = app.querySelector(".ppt-fs-thumbnails-sidebar");
+    if (newFsSidebar) {
+      newFsSidebar.scrollTop = fsSidebarScrollTop;
+    }
+  }
+
+  if (embeddedSidebarScrollTop !== null) {
+    const newEmbeddedSidebar = app.querySelector(".ppt-slide-sidebar") || app.querySelector(".ppt-slides-strip");
+    if (newEmbeddedSidebar) {
+      if (newEmbeddedSidebar.scrollTop !== undefined) newEmbeddedSidebar.scrollTop = embeddedSidebarScrollTop;
+      if (newEmbeddedSidebar.scrollLeft !== undefined) newEmbeddedSidebar.scrollLeft = embeddedSidebarScrollTop;
+    }
+  }
 }
 
 function bindEvents() {

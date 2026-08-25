@@ -80,15 +80,15 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; align-items:center; gap:3px;">
-            <span style="font-size:10px; color:#8b949e;">Eng Size:</span>
+            <span style="font-size:10px; font-weight:600; color:#475569;">Eng Size:</span>
             <input type="number" class="ppt-fs-input-num" data-ppt-setting="engFontSize" value="${engFontSize}" min="12" max="36" style="width:42px;" />
-            <span style="font-size:10px; color:#8b949e; margin-left:3px;">Hindi:</span>
+            <span style="font-size:10px; font-weight:600; color:#475569; margin-left:3px;">Hindi:</span>
             <input type="number" class="ppt-fs-input-num" data-ppt-setting="hindiFontSize" value="${hindiFontSize}" min="12" max="36" style="width:42px;" />
           </div>
           <div style="display:flex; align-items:center; gap:3px;">
-            <span style="font-size:10px; color:#8b949e;">Box Width:</span>
-            <input type="range" data-ppt-setting="questionBoxWidth" min="40" max="100" value="${boxWidth}" style="width:75px;" />
-            <span style="font-size:10px; color:#c9d1d9;">${boxWidth}%</span>
+            <span style="font-size:10px; font-weight:600; color:#475569;">Box Width:</span>
+            <input type="range" data-ppt-setting="questionBoxWidth" min="40" max="100" value="${boxWidth}" style="width:75px; accent-color:#2563eb;" />
+            <span style="font-size:10px; font-weight:700; color:#0f172a;">${boxWidth}%</span>
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">Question Settings</div>
@@ -109,12 +109,11 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
         <div class="ppt-fs-ribbon-group-title">Options Layout</div>
       </div>
 
-
       <!-- 5. Footer Related & Apply Scope -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; align-items:center; gap:3px;">
-            <input type="text" class="ppt-fs-input-text" data-ppt-setting="footerText" value="${escapeHtml(settings.footerText || 'Maths by Aditya | Telegram: @YourChannel')}" placeholder="Footer text..." style="width:135px; font-size:11px;" />
+            <input type="text" class="ppt-fs-input-text" data-ppt-setting="footerText" value="${escapeHtml(settings.footerText || 'Maths by Aditya | Telegram: @YourChannel')}" placeholder="Footer text..." style="width:140px; font-size:11px;" />
           </div>
           <div style="display:flex; align-items:center; gap:3px;">
             <label class="ppt-fs-color-cell" title="Footer Background Color">
@@ -128,10 +127,9 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
             <button class="ppt-fs-ribbon-btn-sm ${isAllScope ? 'is-active' : ''}" data-action="ppt-set-apply-scope" data-scope="${isAllScope ? 'current' : 'all'}" title="Toggle Apply to All Slides vs Current Slide Only" style="font-size:10px; padding:2px 5px;">
               ${isAllScope ? '🌐 All Slides' : '📄 Current'}
             </button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-all" title="Apply Current Slide Background, Design & Alignments to ALL Slides" style="color:#58a6ff; font-weight:700; font-size:10px; padding:2px 5px;">
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-all" title="Apply Current Slide Background, Design & Alignments to ALL Slides" style="font-weight:700; font-size:10px; padding:2px 5px;">
               ⚡ Apply All
             </button>
-
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">5. Footer & Scope</div>

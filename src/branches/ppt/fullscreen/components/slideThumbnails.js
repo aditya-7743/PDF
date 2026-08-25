@@ -168,7 +168,14 @@ export function renderSlideThumbnails(state) {
     <aside class="ppt-fs-thumbnails-sidebar" aria-label="Slide Thumbnails">
       <div class="ppt-fs-thumbnails-header">
         <span>SLIDES (${questions.length})</span>
-        <button class="ppt-fs-btn-icon" data-action="ppt-add-slide" title="Add Slide" style="color:#7ee787;">➕</button>
+        <div style="display:flex; gap:3px; align-items:center;">
+          <button class="ppt-fs-btn-icon" data-action="ppt-add-blank-slide" title="Add Pure White Blank Slide (Poster / Promo / End Slide)" style="font-size:10px; padding:0 5px; width:auto; height:22px; gap:2px; font-weight:700; color:#1e293b;">
+            📄+ Blank
+          </button>
+          <button class="ppt-fs-btn-icon" data-action="ppt-add-slide" title="Add Question Slide (+)" style="font-size:11px; width:22px; height:22px; font-weight:800; color:#2563eb;">
+            ➕
+          </button>
+        </div>
       </div>
 
       <div class="ppt-fs-thumbnails-list">

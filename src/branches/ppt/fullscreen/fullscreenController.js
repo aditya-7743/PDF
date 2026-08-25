@@ -52,6 +52,12 @@ export function bindFullscreenEvents(app, state, render, recordUndo, saveState) 
   const overlay = app.querySelector(".ppt-fullscreen-app-overlay");
   if (!overlay) return;
 
+  // Auto-scroll the active selected slide thumbnail into view so Page Manager always shows the current slide
+  const activeThumb = overlay.querySelector(".ppt-fs-thumb-item.is-selected");
+  if (activeThumb) {
+    activeThumb.scrollIntoView({ block: "nearest", behavior: "auto" });
+  }
+
   const zoomSlider = overlay.querySelector("[data-ppt-fs-zoom]");
   if (zoomSlider) {
     zoomSlider.addEventListener("input", (e) => {
@@ -63,4 +69,22 @@ export function bindFullscreenEvents(app, state, render, recordUndo, saveState) 
       saveState(state);
     });
   }
+
+  // Keyboard shortcut: Ctrl+A / Cmd+A to select all boxes on the active slide canvas
+  overlay.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+      const activeEl = document.activeElement;
+      const isTyping = activeEl && (
+        activeEl.tagName === "INPUT" ||
+        activeEl.tagName === "TEXTAREA" ||
+        activeEl.isContentEditable ||
+        activeEl.getAttribute("contenteditable") === "true"
+      );
+      if (!isTyping) {
+        e.preventDefault();
+        const boxes = overlay.querySelectorAll(".canva-transform-box");
+        boxes.forEach((b) => b.classList.add("is-selected"));
+      }
+    }
+  });
 }

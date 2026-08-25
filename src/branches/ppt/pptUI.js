@@ -1,6 +1,6 @@
 // PPT Slide Builder UI Templates
 import { getSlideSettings, defaultPptSettings, pptThemes } from "../pptBranch.js";
-import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js";
+import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js?v=83";
 
 
 export function getQuestionImages(q) {

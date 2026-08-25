@@ -31,11 +31,11 @@ export function renderRibbonExport(state, settings, activeQ, activeIdx, totalSli
             </button>
           </div>
           <div style="display:flex; gap:3px; align-items:center;">
-            <span style="font-size:10px; color:#8b949e;">Format:</span>
-            <button class="ppt-fs-ribbon-btn-sm ${(exportSettings.format || 'pdf') === 'pdf' ? 'is-active' : ''}" data-action="ppt-set-export-format" data-format="pdf" style="font-weight:700; color:#7ee787;">
+            <span style="font-size:10px; font-weight:600; color:#475569;">Format:</span>
+            <button class="ppt-fs-ribbon-btn-sm ${(exportSettings.format || 'pdf') === 'pdf' ? 'is-active' : ''}" data-action="ppt-set-export-format" data-format="pdf" style="font-weight:700;">
               📄 PDF
             </button>
-            <button class="ppt-fs-ribbon-btn-sm ${exportSettings.format === 'pptx' ? 'is-active' : ''}" data-action="ppt-set-export-format" data-format="pptx" style="font-weight:700; color:#58a6ff;">
+            <button class="ppt-fs-ribbon-btn-sm ${exportSettings.format === 'pptx' ? 'is-active' : ''}" data-action="ppt-set-export-format" data-format="pptx" style="font-weight:700;">
               📊 PPTX
             </button>
           </div>
@@ -63,16 +63,18 @@ export function renderRibbonExport(state, settings, activeQ, activeIdx, totalSli
 
           <div style="display:flex; gap:3px; align-items:center;">
             ${exportSettings.scope === 'range' ? `
-              <span style="font-size:10px; color:#8b949e;">Pages:</span>
-              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="customRange" value="${escapeHtml(exportSettings.customRange || `1, 2, 5-20`)}" placeholder="e.g. 1, 2, 51-75" style="width:130px; font-size:10px;" title="Comma-separated pages and ranges (e.g. 1, 2, 51-75)" />
+              <span style="font-size:10px; font-weight:600; color:#475569;">Pages:</span>
+              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="customRange" value="${escapeHtml(exportSettings.customRange || `1, 2, 5-20`)}" placeholder="e.g. 1, 2, 51-75" style="width:120px; font-size:10px;" title="Comma-separated pages and ranges (e.g. 1, 2, 51-75)" />
             ` : exportSettings.scope === 'sets' ? `
-              <span style="font-size:10px; color:#8b949e;">Q/Set:</span>
-              <input type="number" class="ppt-fs-input-num" data-ppt-export-field="chunkSize" value="${exportSettings.chunkSize || 25}" min="1" max="100" style="width:36px; font-size:10px;" title="Number of questions in each set" />
-              <span style="font-size:10px; color:#8b949e; margin-left:2px;">Intro:</span>
-              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatoryPrefix" value="${escapeHtml(exportSettings.mandatoryPrefix || '1, 2')}" placeholder="1, 2" style="width:50px; font-size:10px;" title="Slides to include at the start of EVERY set (e.g. 1, 2 for Thumbnail & WhatsApp QR)" />
+              <span style="font-size:10px; font-weight:600; color:#475569;">Q/Set:</span>
+              <input type="number" class="ppt-fs-input-num" data-ppt-export-field="chunkSize" value="${exportSettings.chunkSize || 25}" min="1" max="100" style="width:34px; font-size:10px;" title="Number of questions in each set" />
+              <span style="font-size:10px; font-weight:600; color:#475569; margin-left:2px;">Intro:</span>
+              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatoryPrefix" value="${escapeHtml(exportSettings.mandatoryPrefix || '')}" placeholder="1, 2" style="width:42px; font-size:10px;" title="Slides to include at the start of EVERY set" />
+              <span style="font-size:10px; font-weight:600; color:#475569; margin-left:2px;">Exit:</span>
+              <input type="text" class="ppt-fs-input-text" data-ppt-export-field="mandatorySuffix" value="${escapeHtml(exportSettings.mandatorySuffix || '')}" placeholder="2, 7" style="width:42px; font-size:10px;" title="Slides to include at the end of EVERY set" />
             ` : `
-              <span style="font-size:10px; color:#8b949e;">Exporting:</span>
-              <span style="font-size:10px; color:#58a6ff; font-weight:bold;">${exportSettings.scope === 'current' ? `Slide ${activeIdx + 1} of ${totalSlides}` : `All ${totalSlides} Slides`}</span>
+              <span style="font-size:10px; font-weight:600; color:#475569;">Exporting:</span>
+              <span style="font-size:10px; color:#2563eb; font-weight:700;">${exportSettings.scope === 'current' ? `Slide ${activeIdx + 1} of ${totalSlides}` : `All ${totalSlides} Slides`}</span>
             `}
           </div>
         </div>
@@ -83,15 +85,15 @@ export function renderRibbonExport(state, settings, activeQ, activeIdx, totalSli
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; align-items:center; gap:3px;">
-            <span style="font-size:10px; color:#8b949e;">Name:</span>
+            <span style="font-size:10px; font-weight:600; color:#475569;">Name:</span>
             <input type="text" class="ppt-fs-input-text" data-ppt-export-field="fileNamePattern" value="${escapeHtml(exportSettings.fileNamePattern || `${topicName}_Set_{set}`)}" placeholder="File name template..." style="width:145px; font-size:10px;" title="Available tokens: {topic}, {set}, {start}, {end}, {quality}" />
           </div>
-          <div style="font-size:9px; color:#8b949e; display:flex; gap:2px;">
-            <span>Tokens:</span>
-            <span style="color:#58a6ff;">{set}</span>
-            <span style="color:#58a6ff;">{start}</span>
-            <span style="color:#58a6ff;">{end}</span>
-            <span style="color:#58a6ff;">{topic}</span>
+          <div style="font-size:9px; color:#64748b; display:flex; gap:3px;">
+            <span style="font-weight:600;">Tokens:</span>
+            <span style="color:#2563eb; font-weight:600;">{set}</span>
+            <span style="color:#2563eb; font-weight:600;">{start}</span>
+            <span style="color:#2563eb; font-weight:600;">{end}</span>
+            <span style="color:#2563eb; font-weight:600;">{topic}</span>
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">3. Custom File Name</div>
@@ -100,11 +102,11 @@ export function renderRibbonExport(state, settings, activeQ, activeIdx, totalSli
       <!-- 4. Quick Export Actions & Detailed Modal -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; align-items:center; gap:4px;">
-          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-run-configured-export" style="color:#7ee787; font-weight:700;" title="Run Export with Selected Quality and Ranges">
+          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-run-configured-export" title="Run Export with Selected Quality and Ranges">
             <span class="ppt-fs-icon">📥</span>
             <span>Export Now</span>
           </button>
-          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-open-export-modal" style="color:#58a6ff;" title="Open Full Interactive Export Hub with Sets Breakdown Table">
+          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-open-export-modal" title="Open Full Interactive Export Hub with Sets Breakdown Table">
             <span class="ppt-fs-icon">⚙️</span>
             <span>Export Hub</span>
           </button>

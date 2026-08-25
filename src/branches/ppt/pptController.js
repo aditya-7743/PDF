@@ -277,6 +277,11 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
   initCanvasResizeHandles(app, state, recordUndo, saveState, render);
   updateToolbarDisplay(app, state);
   bindFullscreenEvents(app, state, render, recordUndo, saveState);
+
+  const activeEmbeddedThumb = app.querySelector(".ppt-slide-card.is-active") || app.querySelector(".ppt-sidebar-item.is-active");
+  if (activeEmbeddedThumb) {
+    activeEmbeddedThumb.scrollIntoView({ block: "nearest", behavior: "auto" });
+  }
 }
 
 
@@ -1327,7 +1332,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
       return false;
     }
     const rect = box.getBoundingClientRect();
-    const borderMargin = 8; // 8px border grab zone around the bounding box
+    const borderMargin = 10; // 10px grab zone around the bounding box
     const x = e.clientX;
     const y = e.clientY;
     const nearTop = Math.abs(y - rect.top) <= borderMargin;
@@ -1337,10 +1342,100 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
     return nearTop || nearBottom || nearLeft || nearRight;
   }
 
+  function getBoxTransformType(b) {
+    let t = b.dataset.pptResizeType;
+    if (!t) {
+      if (b.classList.contains("slide-topic-box")) t = "topic-position";
+      else if (b.classList.contains("slide-q-badge-box") || b.classList.contains("slide-standalone-q-badge-box")) t = "qbadge-position";
+      else if (b.classList.contains("slide-exam-header-box") || b.classList.contains("slide-exam-section") || b.classList.contains("slide-standalone-exam-tag")) t = "exam-position";
+      else if (b.classList.contains("slide-eng-section")) t = "eng-position";
+      else if (b.classList.contains("slide-hindi-section")) t = "hindi-position";
+      else if (b.classList.contains("slide-divider-wrapper")) t = "divider-position";
+      else if (b.classList.contains("slide-options-container")) t = "options-position";
+      else if (b.classList.contains("slide-image-container")) t = "image-position";
+    }
+    return t;
+  }
+
   canvasWrappers.forEach((canvasWrapper) => {
     const resizableBoxes = canvasWrapper.querySelectorAll(".canva-transform-box");
+
+    // 1. Marquee Drag Selection on Canvas Background
+    canvasWrapper.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".canva-transform-box") || e.target.closest(".canva-handle") || e.target.closest(".slide-image-delete-btn")) {
+        return;
+      }
+
+      if (!e.shiftKey && !e.ctrlKey) {
+        resizableBoxes.forEach((b) => b.classList.remove("is-selected"));
+      }
+
+      const wrapperRect = canvasWrapper.getBoundingClientRect();
+      const stageScaler = canvasWrapper.closest(".ppt-fs-stage-scaler");
+      const zoomScale = stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1;
+
+      const startCanvasX = (e.clientX - wrapperRect.left) / zoomScale;
+      const startCanvasY = (e.clientY - wrapperRect.top) / zoomScale;
+
+      const marquee = document.createElement("div");
+      marquee.className = "canva-marquee-selection";
+      marquee.style.left = `${startCanvasX}px`;
+      marquee.style.top = `${startCanvasY}px`;
+      marquee.style.width = "0px";
+      marquee.style.height = "0px";
+      canvasWrapper.appendChild(marquee);
+
+      function onMarqueeMouseMove(moveEvt) {
+        const curCanvasX = (moveEvt.clientX - wrapperRect.left) / zoomScale;
+        const curCanvasY = (moveEvt.clientY - wrapperRect.top) / zoomScale;
+
+        const left = Math.min(startCanvasX, curCanvasX);
+        const top = Math.min(startCanvasY, curCanvasY);
+        const width = Math.abs(curCanvasX - startCanvasX);
+        const height = Math.abs(curCanvasY - startCanvasY);
+
+        marquee.style.left = `${left}px`;
+        marquee.style.top = `${top}px`;
+        marquee.style.width = `${width}px`;
+        marquee.style.height = `${height}px`;
+
+        if (width > 4 || height > 4) {
+          const marqueeRect = {
+            left: Math.min(e.clientX, moveEvt.clientX),
+            top: Math.min(e.clientY, moveEvt.clientY),
+            right: Math.max(e.clientX, moveEvt.clientX),
+            bottom: Math.max(e.clientY, moveEvt.clientY)
+          };
+
+          resizableBoxes.forEach((b) => {
+            const bRect = b.getBoundingClientRect();
+            const intersects = !(
+              bRect.right < marqueeRect.left ||
+              bRect.left > marqueeRect.right ||
+              bRect.bottom < marqueeRect.top ||
+              bRect.top > marqueeRect.bottom
+            );
+            if (intersects) {
+              b.classList.add("is-selected");
+            } else if (!e.shiftKey && !e.ctrlKey) {
+              b.classList.remove("is-selected");
+            }
+          });
+        }
+      }
+
+      function onMarqueeMouseUp() {
+        document.removeEventListener("mousemove", onMarqueeMouseMove);
+        document.removeEventListener("mouseup", onMarqueeMouseUp);
+        if (marquee.parentNode) marquee.parentNode.removeChild(marquee);
+      }
+
+      document.addEventListener("mousemove", onMarqueeMouseMove);
+      document.addEventListener("mouseup", onMarqueeMouseUp);
+    });
+
+    // 2. Individual Box Selection & Group Dragging
     resizableBoxes.forEach((box) => {
-      // Dynamically switch cursor: 'move' (4-way arrow) on the border line/pill, 'text' inside editable content
       box.addEventListener("mousemove", (e) => {
         if (e.target.closest(".canva-handle") || e.target.closest(".slide-image-delete-btn")) return;
         const onBorder = isEventOnBorderOrPill(e, box);
@@ -1355,37 +1450,46 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
       box.addEventListener("mousedown", (e) => {
         if (e.target.closest(".canva-handle") || e.target.closest(".canva-pill-action") || e.target.closest(".slide-image-delete-btn")) return;
 
-        resizableBoxes.forEach((b) => b.classList.remove("is-selected"));
-        box.classList.add("is-selected");
+        const isMultiToggle = e.shiftKey || e.ctrlKey;
+        if (isMultiToggle) {
+          box.classList.toggle("is-selected");
+        } else {
+          if (!box.classList.contains("is-selected")) {
+            resizableBoxes.forEach((b) => b.classList.remove("is-selected"));
+            box.classList.add("is-selected");
+          }
+        }
 
         const onBorder = isEventOnBorderOrPill(e, box);
         if (!onBorder) {
-          // Clicked inside the box (on text or blank space inside) -> allow pure natural text selection and cursor placement!
           return;
         }
-
-        let type = box.dataset.pptResizeType;
-        if (!type) {
-          if (box.classList.contains("slide-topic-box")) type = "topic-position";
-          else if (box.classList.contains("slide-q-badge-box") || box.classList.contains("slide-standalone-q-badge-box")) type = "qbadge-position";
-          else if (box.classList.contains("slide-exam-header-box") || box.classList.contains("slide-exam-section")) type = "exam-position";
-          else if (box.classList.contains("slide-eng-section")) type = "eng-position";
-          else if (box.classList.contains("slide-hindi-section")) type = "hindi-position";
-          else if (box.classList.contains("slide-divider-wrapper")) type = "divider-position";
-          else if (box.classList.contains("slide-options-container")) type = "options-position";
-          else if (box.classList.contains("slide-image-container")) type = "image-position";
-        }
-
-        if (!type) return;
 
         const isCurrentScope = isTargetCurrentScope(state.ppt);
         const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
         if (!activeQ) return;
         const initialSettings = { ...getSlideSettings(state.ppt.settings, activeQ) };
-        const imgId = box.dataset.imageId;
         const imgList = getQuestionImages(activeQ);
-        const targetImg = imgList.find((im) => (im.id || im) === imgId) || imgList[0];
-        const initialImage = targetImg ? { ...targetImg } : { posX: 0, posY: 0, width: 320, height: 180 };
+
+        // Collect all currently selected boxes on this slide for simultaneous group movement
+        const selectedBoxes = Array.from(canvasWrapper.querySelectorAll(".canva-transform-box.is-selected"));
+        if (!selectedBoxes.includes(box)) {
+          selectedBoxes.push(box);
+        }
+
+        const groupItems = selectedBoxes.map((b) => {
+          const bType = getBoxTransformType(b);
+          const bImgId = b.dataset.imageId;
+          const bImg = imgList.find((im) => (im.id || im) === bImgId) || imgList[0];
+          return {
+            box: b,
+            type: bType,
+            targetImg: bImg,
+            initialImage: bImg ? { ...bImg } : null
+          };
+        }).filter((item) => !!item.type);
+
+        if (!groupItems.length) return;
 
         e.preventDefault();
         e.stopPropagation();
@@ -1425,31 +1529,35 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           const deltaX = rawDeltaX / zoomScale;
           const deltaY = rawDeltaY / zoomScale;
 
-          if (type === "topic-position") {
-            setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
-            setTransform("topicPosY", Math.round((initialSettings.topicPosY || 0) + deltaY));
-          } else if (type === "qbadge-position") {
-            setTransform("qBadgePosX", Math.round((initialSettings.qBadgePosX || 0) + deltaX));
-            setTransform("qBadgePosY", Math.round((initialSettings.qBadgePosY || 0) + deltaY));
-          } else if (type === "exam-position") {
-            setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
-            setTransform("examTagPosY", Math.round((initialSettings.examTagPosY || 0) + deltaY));
-          } else if (type === "eng-position") {
-            setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
-            setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
-          } else if (type === "hindi-position") {
-            setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
-            setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
-          } else if (type === "divider-position") {
-            setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
-            setTransform("dividerPosY", Math.round((initialSettings.dividerPosY || 0) + deltaY));
-          } else if (type === "options-position") {
-            setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
-            setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
-          } else if (type === "image-position" && targetImg) {
-            targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
-            targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
-          }
+          // Apply delta to EVERY selected item in the group simultaneously!
+          groupItems.forEach((item) => {
+            const { type, targetImg, initialImage } = item;
+            if (type === "topic-position") {
+              setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
+              setTransform("topicPosY", Math.round((initialSettings.topicPosY || 0) + deltaY));
+            } else if (type === "qbadge-position") {
+              setTransform("qBadgePosX", Math.round((initialSettings.qBadgePosX || 0) + deltaX));
+              setTransform("qBadgePosY", Math.round((initialSettings.qBadgePosY || 0) + deltaY));
+            } else if (type === "exam-position") {
+              setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
+              setTransform("examTagPosY", Math.round((initialSettings.examTagPosY || 0) + deltaY));
+            } else if (type === "eng-position") {
+              setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+              setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+            } else if (type === "hindi-position") {
+              setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+              setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+            } else if (type === "divider-position") {
+              setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
+              setTransform("dividerPosY", Math.round((initialSettings.dividerPosY || 0) + deltaY));
+            } else if (type === "options-position") {
+              setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+              setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+            } else if (type === "image-position" && targetImg && initialImage) {
+              targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
+              targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
+            }
+          });
 
           updateLiveCanvasSlide(app, state, saveState);
           syncCustomizerSliders(app, state);
