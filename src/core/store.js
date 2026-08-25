@@ -42,11 +42,17 @@ export function loadState() {
     const raw = localStorage.getItem(branches.app.autosaveKey);
     if (!raw) return createDefaultState();
     const saved = JSON.parse(raw);
-    return {
+    const state = {
       ...createDefaultState(),
       ...saved,
       columns: normalizeColumnSizes(saved.columns),
     };
+    if (state.ppt) {
+      if (!state.ppt.fsZoom || state.ppt.fsZoom === 90 || state.ppt.fsZoom === 85 || state.ppt.fsZoom === 95 || state.ppt.fsZoom === 110) {
+        state.ppt.fsZoom = 100;
+      }
+    }
+    return state;
   } catch {
     return createDefaultState();
   }

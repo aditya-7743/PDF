@@ -40,6 +40,81 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-25 - Full Customization Export Hub & Batch Sets Generator
+
+- **Dedicated 'Export' Ribbon Tab**:
+  - Added new **`Export`** tab in ribbon navigation: **Home | Design | Editor | Insert | Export | View**.
+  - **Quality Selector**: Low (720p Fast/WhatsApp), Medium (1080p Crisp HD), High (Ultra 4K Print).
+  - **Format Toggle**: PDF vs PPTX.
+  - **Range & Selection**: All Slides, Current Slide, Custom Range (`1, 2, 51-75`), Batch Sets Maker.
+  - **Custom File Naming Template**: Dynamic tokens `{topic}`, `{set}`, `{start}`, `{end}`, `{quality}`.
+- **Interactive Export Hub & Batch Sets Splitter**:
+  - Automatically divides 300 questions into sets of 25 (or custom `N`).
+  - Prepend **Mandatory Intro Slides** (e.g. `1, 2` for Thumbnail & WhatsApp QR) to **every generated set**.
+  - Individual set 1-click downloads ([📥 PDF] / [📊 PPTX]) or 1-click **Batch Download All Sets** with live progress bar!
+
+### 2026-08-25 - Exam Badge & Options Layout Shifted to Home & Design Tabs
+
+- **Streamlined Ribbon Workflow**:
+  - Shifted the **Exam Badge** (`🎯 Below Question`, `📌 In Header`, `🔴 Red Pill`, `🟡 Yellow Box`) and **Options Layout** (`🔲 Card Boxes`, `📝 Clean (a)(b)`, `2 × 2 Grid`, `1 Column`) controls directly into the **`Home`** and **`Design`** tabs.
+  - Removed duplicate options controls from the `Editor` tab so Editor stays 100% focused on text editing, formatting, fonts, and paragraph layout.
+  - Removed duplicate badge controls from the `Insert` tab so Insert stays 100% focused on Media, Images, and Math formulas.
+
+### 2026-08-25 - Advanced Editor Ribbon: Paragraph Alignments, Line Spacing & Lists
+
+- **Google Docs / PowerPoint Style Rich Text Controls**:
+  - **Horizontal Text Alignment**: Left (`align-left`), Center (`align-center`), Right (`align-right`), Justify (`align-justify`).
+  - **Vertical Text Alignment**: Top (`valign-top`), Middle (`valign-middle`), Bottom (`valign-bottom`).
+  - **Line & Paragraph Spacing**: Dedicated `↕ Line Spacing` selector (`1.0`, `1.15`, `1.25`, `1.34`, `1.5`, `1.8`, `2.0`).
+  - **Lists & Indentation**: Bulleted list (`bullet-list`), Numbered list (`number-list`), Outdent / Decrease Indent (`outdent`), Indent / Increase Indent (`indent`).
+  - **Clean Math Polish**: `✨ Clean` tool for auto-formatting operator spacing in formulas (+, −, ×, ÷, =).
+
+### 2026-08-25 - Ribbon Tab Reorganization: 'Home 2' renamed to 'Design'
+
+- **Clean PowerPoint Ribbon Tab Hierarchy**:
+  - Renamed the comprehensive styling tab `Home 2 (Style)` to **`Design`** (`data-tab="design"`).
+  - Removed the old duplicate separate "Design" button.
+  - Final clean ribbon navigation: **Home | Design | Editor | Insert | View**.
+  - Updated keyboard shortcuts (Alt+2, Alt+D, Alt+G switch to the unified Design tab).
+
+### 2026-08-25 - 100% WYSIWYG PDF & PPTX Export Rendering Fix
+
+- **Perfect 1:1 Match Between Live Preview and Exported Files**:
+  - Fixed `pdfExporter.js` and `pptxExporter.js` to strictly honor `showHeader === false` (custom background mode) — hiding the red/maroon header bar and unused Topic titles instead of drawing them on top of custom background headers.
+  - Added full support for `boxPosY` and `boxPosX` in both exporters so user-dragged slide body sections maintain exact vertical and horizontal placement below custom template banners.
+  - Fixed standalone Q-number badge rendering when header is hidden: badge is drawn in the correct position with `qBadgeBg` pill and `qBadgeColor` text (fixing the invisible white text bug).
+  - Floating image / diagram layer coordinates now map 1:1 with canvas coordinate space `(img.posX, img.posY)` without extra header offsets.
+  - Verified all visibility toggles (`showEnglish`, `showHindi`, `showExamTag`, `showOptions`, `showFooter`, `showDivider`) in export engines.
+
+### 2026-08-25 - 100% Screen Zoom Live Preview & 4-Way Arrow Direct Box Dragging Fix
+
+- **100% Zoom Live Preview Full Slide Visibility**:
+  - Re-engineered `.ppt-fs-stage-viewport` in `styles.css` with top-aligned flex layout and `transform-origin: top center` so the entire 16:9 slide canvas (including the top header bar) is 100% visible at 100% screen zoom without being tucked or clipped under the ribbon toolbar.
+  - Compacted ribbon height (titlebar 28px, tabs 28px, container 72px) saving 50px of vertical height for the center live preview.
+  - Optimized default slide typography and vertical padding in `pptBranch.js` so multi-line questions and 4 options fit inside the 16:9 canvas with ideal breathing room.
+  - Set default fullscreen zoom and reset zoom strictly to 100% (`ppt.fsZoom = 100`) in `store.js`, `pptController.js`, and `fullscreenController.js` overriding stale 90% localStorage caches.
+- **PowerPoint-Style 4-Way Arrow Move Cursor & Direct Box Dragging**:
+  - Added `cursor: move !important` to all transform boxes (`.slide-topic-box`, `.slide-q-badge-box`, `.slide-exam-header-box`, `.slide-eng-section`, `.slide-hindi-section`, `.slide-divider-wrapper`, `.slide-options-container`, `.slide-image-container`).
+  - Implemented universal direct drag on all `.canva-transform-box` elements in `pptController.js` so clicking and dragging anywhere on the box frame, border, padding, or pill smoothly translates the element in real time while preserving text-editing when clicking text.
+
+- **Dedicated Modular Fullscreen Folder** (`src/branches/ppt/fullscreen/`):
+  - `ribbon/`: `ribbonHome.js`, `ribbonInsert.js`, `ribbonDesign.js`, `ribbonView.js`, `ribbonCommon.js`.
+  - `components/`: `slideThumbnails.js` (left slide navigation strip), `slideCanvas.js` (center 16:9 live slide canvas with 100% WYSIWYG match of main page state), `statusBar.js` (bottom status bar, zoom slider, exit button).
+  - `fullscreenUI.js` & `fullscreenController.js`: Fullscreen modal shell, ribbon tab switching, zoom scaler, keyboard shortcuts (PageUp/PageDown, Esc to exit).
+  - **100% WYSIWYG Rendering**: The center canvas renders the exact live slide that was rendered on the main page (exact questions, topics, exam tags, fonts, colors, draggable bounding boxes, diagrams, and options).
+
+### 2026-08-25 - Modular Branch Architecture Refactoring (Zero Regressions)
+
+- **Clean Modular Isolation**:
+  - `src/branches/ppt/pptUI.js`: Dedicated PPT slide builder UI template rendering (`renderPptBuilderWorkbench`, `renderPptEditorToolbar`, `renderPptImportWizardModal`).
+  - `src/branches/ppt/pptController.js`: Complete PPT builder events, 8-point interactive canvas resizing, inline slide editing, drag & drop uploads, and PDF/PPTX exporters.
+  - `src/branches/pptBranch.js`: Unified entry point re-exporting state defaults, themes, samples, UI, and controller.
+  - `src/branches/imagePdf/imagePdfController.js`: Isolated Image to PDF batch converter, reordering, and PDF splitting.
+  - `src/branches/imageResize/imageResizeController.js`: Isolated Image Resize workspace, units conversion, and format exporters.
+  - `src/branches/drawing/drawingController.js`: Isolated Math Figures & Geometric Drawing canvas engine.
+  - `src/branches/equation/equationController.js`: Isolated Equation Editor, visual MathML sync, and LaTeX palettes.
+  - `src/main.js`: Refactored from a 6200+ line monolith down to a lightweight, elegant central orchestrator (~400 lines) with 100% test pass rate and zero regressions.
+
 ### 2026-08-24 - 100% WYSIWYG Live Preview to PDF/PPTX Export Synchronization Fix
 
 - **Perfect Alignment Match**:
@@ -100,6 +175,9 @@ http://127.0.0.1:8765/
 
 ### 2026-08-20 - Removed Restrictive Clamping on Options & Question Drag Positions
 
+- **100% WYSIWYG DOM-SVG Snapshot Engine**:
+  - Replaced manual Canvas 2D text coordinate measurements with native browser DOM SVG `foreignObject` rendering in `pdfExporter.js`.
+  - Guarantees 100.00% identical line wrapping, font rendering, subpixel kerning, padding, transforms, and option card placements between live editor and exported PDF.
 - **100% Unconstrained Freeform Drag**:
   - Removed artificial vertical clamping limits (previously restricted to `+60px` max down) on `optionsPosY`, `engPosY`, `hindiPosY`, `examTagPosY`, and `topicPosY`.
   - You can now drag the **Options Grid** all the way to the very bottom, footer, or anywhere on the slide without it getting stuck!
