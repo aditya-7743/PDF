@@ -1,17 +1,19 @@
 // Fullscreen PPT Slide Workbench UI
-import { getSlideSettings } from "../../pptBranch.js?v=83";
-import { escapeHtml } from "./ribbon/ribbonCommon.js?v=83";
-import { renderRibbonHome } from "./ribbon/ribbonHome.js?v=83";
-import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js?v=83";
-import { renderRibbonEditor } from "./ribbon/ribbonEditor.js?v=83";
-import { renderRibbonInsert } from "./ribbon/ribbonInsert.js?v=83";
-import { renderRibbonDesign } from "./ribbon/ribbonDesign.js?v=83";
-import { renderRibbonExport } from "./ribbon/ribbonExport.js?v=83";
-import { renderRibbonView } from "./ribbon/ribbonView.js?v=83";
-import { renderSlideThumbnails } from "./components/slideThumbnails.js?v=83";
-import { renderSlideCanvas } from "./components/slideCanvas.js?v=83";
-import { renderStatusBar } from "./components/statusBar.js?v=83";
-import { renderExportModalHtml } from "./components/exportModal.js?v=83";
+import { getSlideSettings } from "../../pptBranch.js?v=v93-drag-drop-perfect";
+import { escapeHtml } from "./ribbon/ribbonCommon.js?v=v93-drag-drop-perfect";
+import { renderRibbonHome } from "./ribbon/ribbonHome.js?v=v93-drag-drop-perfect";
+import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js?v=v93-drag-drop-perfect";
+import { renderRibbonEditor } from "./ribbon/ribbonEditor.js?v=v93-drag-drop-perfect";
+import { renderRibbonInsert } from "./ribbon/ribbonInsert.js?v=v93-drag-drop-perfect";
+import { renderRibbonDesign } from "./ribbon/ribbonDesign.js?v=v93-drag-drop-perfect";
+import { renderRibbonExport } from "./ribbon/ribbonExport.js?v=v93-drag-drop-perfect";
+import { renderRibbonView } from "./ribbon/ribbonView.js?v=v93-drag-drop-perfect";
+import { renderSlideThumbnails } from "./components/slideThumbnails.js?v=v93-drag-drop-perfect";
+import { renderSlideCanvas } from "./components/slideCanvas.js?v=v93-drag-drop-perfect";
+import { renderStatusBar } from "./components/statusBar.js?v=v93-drag-drop-perfect";
+import { renderExportModalHtml } from "./components/exportModal.js?v=v93-drag-drop-perfect";
+import { renderPasteModalHtml } from "./components/pasteModal.js?v=v93-drag-drop-perfect";
+import { renderPptImportWizardModal } from "../pptUI.js?v=v93-drag-drop-perfect";
 
 export function renderPptFullscreenOverlay(state) {
   const ppt = state.ppt || {};
@@ -66,6 +68,14 @@ export function renderPptFullscreenOverlay(state) {
         <button class="ppt-fs-tab-btn ${activeTab === 'insert' ? 'is-active' : ''}" data-action="ppt-fs-tab" data-tab="insert">Insert</button>
         <button class="ppt-fs-tab-btn ${activeTab === 'export' ? 'is-active' : ''}" data-action="ppt-fs-tab" data-tab="export">Export</button>
         <button class="ppt-fs-tab-btn ${activeTab === 'view' ? 'is-active' : ''}" data-action="ppt-fs-tab" data-tab="view">View</button>
+
+        <!-- Highlighted Scope Checkbox: Apply ONLY to Current Slide across ALL Tabs -->
+        <label class="ppt-fs-scope-toggle-highlight ${applyScope === 'current' ? 'is-current-active' : ''}" title="Check to edit ONLY Current Slide (${activeIdx + 1}). Uncheck to edit All Slides globally.">
+          <input type="checkbox" data-action="ppt-toggle-global-current-scope" ${applyScope === 'current' ? 'checked' : ''} />
+          <span>
+            ${applyScope === 'current' ? `📌 <b>Current Slide Only (${activeIdx + 1})</b>` : `🌐 All Slides (Global)`}
+          </span>
+        </label>
       </nav>
 
       <!-- 3. Ribbon Content Toolbar -->
@@ -82,7 +92,9 @@ export function renderPptFullscreenOverlay(state) {
       <!-- 5. Bottom Status Bar -->
       ${renderStatusBar(state)}
 
-      <!-- 6. Export Hub Modal (if opened) -->
+      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub) -->
+      ${ppt.showImportWizard ? renderPptImportWizardModal(state) : ""}
+      ${ppt.isPasteModalOpen ? renderPasteModalHtml(state) : ""}
       ${ppt.isExportModalOpen ? renderExportModalHtml(state) : ""}
     </div>
   `;

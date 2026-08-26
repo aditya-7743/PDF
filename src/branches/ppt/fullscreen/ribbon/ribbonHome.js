@@ -4,16 +4,20 @@ import { escapeHtml } from "./ribbonCommon.js";
 export function renderRibbonHome(state, settings, activeQ, activeIdx, totalSlides, applyScope) {
   return `
     <div class="ppt-fs-ribbon-panel" role="toolbar" aria-label="Home Setup Ribbon">
-      <!-- 1. Document Upload (.docx file) -->
+      <!-- 1. Document Upload (.docx file) & Quick Paste -->
       <div class="ppt-fs-ribbon-group">
-        <div class="ppt-fs-ribbon-group-content" style="display:flex; align-items:center; gap:4px;">
-          <input type="file" accept=".docx,.doc" class="ppt-fs-docx-hidden-input" data-action="ppt-upload-docx" style="display:none;" />
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; align-items:center; gap:6px;">
+          <input type="file" accept=".docx,.doc,.txt" class="ppt-fs-docx-hidden-input" data-action="ppt-upload-docx" style="display:none;" />
           <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-trigger-docx-upload" title="Upload Word Document (.docx) to extract questions">
             <span class="ppt-fs-icon">📂</span>
             <span>Upload .DOCX</span>
           </button>
+          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-open-paste-modal" title="Paste Raw Question Text to generate slides directly">
+            <span class="ppt-fs-icon">📋</span>
+            <span>Paste Text</span>
+          </button>
         </div>
-        <div class="ppt-fs-ribbon-group-title">1. Document</div>
+        <div class="ppt-fs-ribbon-group-title">1. Document & Paste</div>
       </div>
 
       <!-- 2. Alignment & Layout Presets (kis alignment me chahiye) -->
@@ -62,6 +66,27 @@ export function renderRibbonHome(state, settings, activeQ, activeIdx, totalSlide
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">Options Layout</div>
+      </div>
+
+      <!-- 2d. Topic Name Section -->
+      <div class="ppt-fs-ribbon-group">
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:4px; justify-content:center;">
+          <div style="display:flex; gap:3px; align-items:center;">
+            <input type="text" 
+                   class="ppt-fs-topic-ribbon-input" 
+                   data-ppt-ribbon-topic
+                   value="${escapeHtml(activeQ.topic || settings.topic || '')}" 
+                   placeholder="Enter Topic Name..." 
+                   title="Type Topic Name here" 
+                   style="padding:4px 8px; font-size:12px; font-weight:700; border:1.5px solid #94a3b8; border-radius:6px; width:220px; background:#ffffff; color:#0f172a; outline:none; text-transform:uppercase;" />
+          </div>
+          <div style="display:flex; gap:3px; align-items:center;">
+            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-topic-to-all" title="Apply this Topic Name to All Slides" style="font-weight:700; color:#2563eb; width:100%; justify-content:center;">
+              ⚡ Apply Topic to All
+            </button>
+          </div>
+        </div>
+        <div class="ppt-fs-ribbon-group-title">Topic Name</div>
       </div>
 
       <!-- 3. Predefined Themes & Custom Background Image Template -->

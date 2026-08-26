@@ -123,7 +123,7 @@ export function renderSlideCanvas(state) {
                 <span class="canva-drag-pill" data-ppt-resize-type="topic-position">✥ Topic</span>
               </div>
               <div class="slide-topic-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="topic" style="color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px;">
-                ${escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
+                ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
               </div>
               <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="topic-resize-nw" title="Scale"></div>
               <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="topic-resize-ne" title="Scale"></div>
@@ -158,7 +158,7 @@ export function renderSlideCanvas(state) {
               <div class="canva-drag-bar">
                 <span class="canva-drag-pill" data-ppt-resize-type="eng-position">✥ English</span>
               </div>
-              <div class="slide-eng-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="english" title="Click to edit English text directly on slide" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 18}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${escapeHtml(activeQ.english || '')}</div>
+              <div class="slide-eng-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="english" title="Click to edit English text directly on slide" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 18}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${activeQ.englishHtml || escapeHtml(activeQ.english || '')}</div>
               <!-- 4 Corner Circle Handles -->
               <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="eng-resize-nw" title="Resize Top-Left"></div>
               <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="eng-resize-ne" title="Resize Top-Right"></div>
@@ -186,7 +186,7 @@ export function renderSlideCanvas(state) {
               <div class="canva-drag-bar">
                 <span class="canva-drag-pill" data-ppt-resize-type="hindi-position">✥ Hindi</span>
               </div>
-              <div class="slide-hindi-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="hindi" title="Click to edit Hindi text directly on slide" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 17}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${escapeHtml(activeQ.hindi || '')}</div>
+              <div class="slide-hindi-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="hindi" title="Click to edit Hindi text directly on slide" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 17}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${activeQ.hindiHtml || escapeHtml(activeQ.hindi || '')}</div>
 
               <!-- 4 Corner Circle Handles -->
               <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="hindi-resize-nw" title="Resize Top-Left"></div>
@@ -214,7 +214,7 @@ export function renderSlideCanvas(state) {
                 font-weight:800;
                 box-shadow:${examTagStyle === 'pill' ? '0 2px 6px rgba(0,0,0,0.35)' : 'none'};
               ">
-                ${escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
+                ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
               </div>
 
               <!-- 4 Corner Scale Handles -->
@@ -252,7 +252,7 @@ export function renderSlideCanvas(state) {
                     ${settings.optionStyle === 'clean' ? `(${(opt.key || String.fromCharCode(65 + oIdx)).toLowerCase()})` : (opt.key || String.fromCharCode(65 + oIdx))}
                   </div>
                   <div class="slide-opt-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="option" data-ppt-canvas-opt-idx="${oIdx}" title="Click to edit Option ${opt.key || String.fromCharCode(65 + oIdx)} on slide" style="color:${settings.optionTextColor || (settings.optionStyle === 'clean' && settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
-                    ${escapeHtml(opt.text || '')}
+                    ${opt.textHtml || escapeHtml(opt.text || '')}
                   </div>
                 </div>
               `).join("")}
@@ -281,7 +281,7 @@ export function renderSlideCanvas(state) {
           <!-- Footer Bar (If Enabled) with Height Handle -->
           <div class="slide-footer-bar ppt-resizable-box" contenteditable="true" spellcheck="false" data-ppt-canvas-field="footer" title="Click to edit Footer on slide" style="display:${isBlankSlide || settings.showFooter === false ? 'none' : 'flex'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
             <div class="ppt-resize-handle ppt-resize-handle-s" style="top:-5px; bottom:auto;" data-ppt-resize-type="footer-height" title="Drag to adjust Footer Height"></div>
-            ${escapeHtml(settings.footerText || '')}
+            ${settings.footerHtml || escapeHtml(settings.footerText || '')}
           </div>
         </div>
       </div>

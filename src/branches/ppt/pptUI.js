@@ -1,15 +1,31 @@
 // PPT Slide Builder UI Templates
-import { getSlideSettings, defaultPptSettings, pptThemes } from "../pptBranch.js";
-import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js?v=83";
+import { getSlideSettings, defaultPptSettings, pptThemes } from "../pptBranch.js?v=v93-drag-drop-perfect";
+import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js?v=v93-drag-drop-perfect";
 
 
 export function getQuestionImages(q) {
   if (!q) return [];
-  if (Array.isArray(q.images) && q.images.length > 0) return q.images;
+  if (Array.isArray(q.images)) {
+    q.images.forEach((img, idx) => {
+      if (typeof img === "string") {
+        q.images[idx] = { id: `img_${idx + 1}`, dataUrl: img, posX: 0, posY: 0, width: 360, height: 202 };
+      } else if (!img.id) {
+        img.id = `img_${idx + 1}`;
+      }
+      if (img.width === undefined) img.width = 360;
+      if (img.height === undefined) img.height = 202;
+      if (img.posX === undefined) img.posX = 0;
+      if (img.posY === undefined) img.posY = 0;
+    });
+    return q.images;
+  }
   if (q.image) {
-    const imgObj = typeof q.image === "object" ? q.image : { id: "img_legacy", dataUrl: q.image, posX: 0, posY: 0, width: 260, height: 200 };
-    if (!imgObj.id) imgObj.id = "img_legacy";
-    return [imgObj];
+    const imgObj = typeof q.image === "object"
+      ? { ...q.image, id: q.image.id || "img_1", posX: q.image.posX || 0, posY: q.image.posY || 0, width: q.image.width || 360, height: q.image.height || 202 }
+      : { id: "img_1", dataUrl: q.image, posX: 0, posY: 0, width: 360, height: 202 };
+    q.images = [imgObj];
+    delete q.image;
+    return q.images;
   }
   return [];
 }

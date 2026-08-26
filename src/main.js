@@ -1,13 +1,13 @@
-import { branches } from "./branches/index.js";
-import { renderApp, getQuestionImages } from "./ui/layout.js";
-import { getEquationDiagnostics } from "./core/normalizer.js";
+import { branches } from "./branches/index.js?v=v93-drag-drop-perfect";
+import { renderApp, getQuestionImages } from "./ui/layout.js?v=v93-drag-drop-perfect";
+import { getEquationDiagnostics } from "./core/normalizer.js?v=v93-drag-drop-perfect";
 import {
   bindPptEvents,
   handlePptAction,
   handlePptSlideNavKeydown,
   handlePptCanvasPaste,
   ensurePptState
-} from "./branches/ppt/pptController.js";
+} from "./branches/ppt/pptController.js?v=v93-drag-drop-perfect";
 import {
   bindImagePdfEvents,
   handleImagePdfPaste,

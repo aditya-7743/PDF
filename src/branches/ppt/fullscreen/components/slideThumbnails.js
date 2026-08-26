@@ -184,12 +184,16 @@ export function renderSlideThumbnails(state) {
           const isSelected = idx === activeIdx;
 
           return `
-            <div class="ppt-fs-thumb-item ${isSelected ? 'is-selected' : ''}" data-action="ppt-select-slide" data-slide-index="${idx}">
+            <div class="ppt-fs-thumb-item ${isSelected ? 'is-selected' : ''}" data-slide-index="${idx}" title="Click to select, or Drag & Drop to reorder slide ${idx + 1}">
               <span class="ppt-fs-thumb-num">${idx + 1}</span>
               <div class="ppt-fs-thumb-card">
                 <div class="ppt-fs-thumb-scaler">
                   ${renderThumbnailSlideHtml(q, settings, idx)}
                 </div>
+              </div>
+              <div class="ppt-fs-thumb-actions">
+                <button type="button" class="ppt-fs-thumb-action-btn" data-action="ppt-move-slide-up" data-slide-index="${idx}" title="Move Slide Up (▲)" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                <button type="button" class="ppt-fs-thumb-action-btn" data-action="ppt-move-slide-down" data-slide-index="${idx}" title="Move Slide Down (▼)" ${idx === questions.length - 1 ? 'disabled' : ''}>▼</button>
               </div>
             </div>
           `;

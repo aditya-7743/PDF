@@ -21,10 +21,13 @@ export function renderRibbonExport(state, settings, activeQ, activeIdx, totalSli
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; gap:2px;">
             <button class="ppt-fs-ribbon-btn-sm ${exportSettings.quality === 'low' ? 'is-active' : ''}" data-action="ppt-set-export-quality" data-quality="low" title="Fast render, smaller file size (1280x720) - Ideal for WhatsApp">
-              ⚡ Low (Fast)
+              ⚡ Low (720p)
             </button>
-            <button class="ppt-fs-ribbon-btn-sm ${(exportSettings.quality || 'medium') === 'medium' ? 'is-active' : ''}" data-action="ppt-set-export-quality" data-quality="medium" title="Crisp High Definition (1920x1080) - Recommended">
-              ⭐ Medium (HD)
+            <button class="ppt-fs-ribbon-btn-sm ${(exportSettings.quality || 'medium') === 'medium' ? 'is-active' : ''}" data-action="ppt-set-export-quality" data-quality="medium" title="Crisp High Definition (1920x1080) - Standard">
+              ⭐ Medium (1080p)
+            </button>
+            <button class="ppt-fs-ribbon-btn-sm ${exportSettings.quality === 'compact' ? 'is-active' : ''}" data-action="ppt-set-export-quality" data-quality="compact" title="Higher Resolution than Medium (2560x1440 2K) with Low Compressed File Size">
+              ⚡ Medium Lite
             </button>
             <button class="ppt-fs-ribbon-btn-sm ${exportSettings.quality === 'high' ? 'is-active' : ''}" data-action="ppt-set-export-quality" data-quality="high" title="Ultra HD 4K Print Quality (3840x2160)">
               💎 Ultra (4K)

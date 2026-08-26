@@ -56,8 +56,8 @@ export function calculateBatchSets(totalSlides, chunkSize = 25, mandatoryPrefixS
     const chunk = questionIndices.slice(i, i + size);
     const setIndices = [...prefixIndices, ...chunk, ...suffixIndices];
     const setNum = sets.length + 1;
-    const startQNum = i + 1;
-    const endQNum = Math.min(questionIndices.length, i + size);
+    const startQNum = chunk.length > 0 ? (chunk[0] + 1) : (i + 1);
+    const endQNum = chunk.length > 0 ? (chunk[chunk.length - 1] + 1) : Math.min(questionIndices.length, i + size);
 
     sets.push({
       setNumber: setNum,
@@ -105,14 +105,16 @@ export function formatFileName(pattern, vars) {
 }
 
 /**
- * Renders the Export Hub Modal HTML.
+ * Renders the Right-Column Preview of Generated Sets & Single Export.
  */
-export function renderExportModalHtml(state) {
+export function renderExportModalPreviewHtml(state) {
   const ppt = state.ppt || {};
   const questions = ppt.questions || [];
   const totalSlides = questions.length;
   const activeQ = questions[ppt.activeQuestionIndex || 0] || {};
-  const topicName = activeQ.topic || ppt.settings?.topic || "Maths_Questions";
+  const topicName = (ppt.settings && ppt.settings.topic && ppt.settings.topic !== "TOPIC")
+    ? ppt.settings.topic
+    : ((activeQ.topic && activeQ.topic !== "TOPIC") ? activeQ.topic : ((questions[0] && questions[0].topic && questions[0].topic !== "TOPIC") ? questions[0].topic : (ppt.settings?.topic || activeQ.topic || "Maths_Questions")));
 
   const exp = ppt.exportSettings || {
     format: "pdf",
@@ -126,6 +128,111 @@ export function renderExportModalHtml(state) {
   };
 
   const calculatedSets = calculateBatchSets(totalSlides, exp.chunkSize, exp.mandatoryPrefix, exp.mandatorySuffix);
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h3 style="margin:0; font-size:13px; font-weight:700; color:#0f172a;">
+        ${exp.scope === 'sets' ? `Generated Sets (${calculatedSets.length} Sets Total)` : `Export Preview`}
+      </h3>
+      ${exp.scope === 'sets' ? `
+        <button class="ppt-export-btn-primary" data-action="ppt-batch-export-all-sets" style="padding:4px 10px; font-size:11px;">
+          📦 Download All ${calculatedSets.length} Sets (Batch)
+        </button>
+      ` : ''}
+    </div>
+
+    <!-- Sets List / Single Download Container -->
+    <div class="ppt-export-sets-list">
+      ${exp.scope === 'sets' ? calculatedSets.map((s) => {
+        const targetFileName = formatFileName(exp.fileNamePattern, {
+          topic: topicName,
+          set: s.setNumber,
+          start: s.startQNum,
+          end: s.endQNum,
+          quality: exp.quality
+        });
+
+        return `
+          <div class="ppt-export-set-card">
+            <div class="ppt-export-set-info">
+              <div class="ppt-export-set-header">
+                <span class="ppt-export-set-badge">Set ${s.setNumber}</span>
+                <span class="ppt-export-set-range">Questions ${s.startQNum} – ${s.endQNum} (${s.qCount} Qs)</span>
+                <span class="ppt-export-set-pages-badge">${s.totalSlideCount} Pages</span>
+              </div>
+              <div class="ppt-export-set-filename" title="${escapeHtml(targetFileName)}.pdf">
+                📄 <b>${escapeHtml(targetFileName)}.pdf</b>
+              </div>
+              <div class="ppt-export-set-subdetail">
+                Includes: ${s.prefixCount ? `Intro (${exp.mandatoryPrefix}) + ` : ''}Questions (${s.startQNum} to ${s.endQNum})${s.suffixCount ? ` + Exit (${exp.mandatorySuffix})` : ''}
+              </div>
+            </div>
+            <div class="ppt-export-set-actions">
+              <button class="ppt-export-set-btn-pdf" data-action="ppt-export-single-set-pdf" data-set-num="${s.setNumber}" title="Download Set ${s.setNumber} as PDF">
+                📥 PDF
+              </button>
+              <button class="ppt-export-set-btn-pptx" data-action="ppt-export-single-set-pptx" data-set-num="${s.setNumber}" title="Download Set ${s.setNumber} as PowerPoint PPTX">
+                📊 PPTX
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("") : `
+        <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
+          <div style="font-size:32px; margin-bottom:8px;">📄</div>
+          <h4 style="margin:0 0 4px 0; color:#f0f6fc; font-size:14px;">
+            ${exp.scope === 'range' ? `Custom Range: ${escapeHtml(exp.customRange || 'All')}` : `All Slides (1 to ${totalSlides})`}
+          </h4>
+          <div style="font-size:11px; color:#8b949e; margin-bottom:12px;">
+            Target File: <b>${escapeHtml(formatFileName(exp.fileNamePattern, { topic: topicName, set: 1, start: 1, end: totalSlides, quality: exp.quality }))}.pdf</b>
+          </div>
+          <div style="display:flex; justify-content:center; gap:8px;">
+            <button class="ppt-export-btn-primary" data-action="ppt-run-modal-single-pdf" style="padding:6px 14px; font-size:12px;">
+              📥 Download PDF (${(exp.quality || 'medium').toUpperCase()})
+            </button>
+            <button class="ppt-export-btn-secondary" data-action="ppt-run-modal-single-pptx" style="padding:6px 14px; font-size:12px;">
+              📊 Download PPTX
+            </button>
+          </div>
+        </div>
+      `}
+    </div>
+
+    <!-- Progress Bar (shown dynamically during batch/export) -->
+    <div class="ppt-export-progress-container" style="display:none; margin-top:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#c9d1d9; margin-bottom:3px;">
+        <span class="ppt-export-progress-label">Exporting...</span>
+        <span class="ppt-export-progress-percent">0%</span>
+      </div>
+      <div class="ppt-export-progress-bar-bg">
+        <div class="ppt-export-progress-bar-fill" style="width:0%;"></div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Renders the Export Hub Modal HTML.
+ */
+export function renderExportModalHtml(state) {
+  const ppt = state.ppt || {};
+  const questions = ppt.questions || [];
+  const totalSlides = questions.length;
+  const activeQ = questions[ppt.activeQuestionIndex || 0] || {};
+  const topicName = (ppt.settings && ppt.settings.topic && ppt.settings.topic !== "TOPIC")
+    ? ppt.settings.topic
+    : ((activeQ.topic && activeQ.topic !== "TOPIC") ? activeQ.topic : ((questions[0] && questions[0].topic && questions[0].topic !== "TOPIC") ? questions[0].topic : (ppt.settings?.topic || activeQ.topic || "Maths_Questions")));
+
+  const exp = ppt.exportSettings || {
+    format: "pdf",
+    quality: "medium",
+    scope: "sets",
+    customRange: "",
+    chunkSize: 25,
+    mandatoryPrefix: "1, 2",
+    mandatorySuffix: "",
+    fileNamePattern: "{topic}_Set_{set}_Q{start}-Q{end}"
+  };
 
   return `
     <div class="ppt-export-modal-backdrop" role="dialog" aria-modal="true" aria-label="Export Hub">
@@ -149,14 +256,18 @@ export function renderExportModalHtml(state) {
             <!-- 1. Quality & Format -->
             <div class="ppt-export-section">
               <label class="ppt-export-label">1. Quality & Output Format</label>
-              <div class="ppt-export-btn-group">
+              <div class="ppt-export-btn-group" style="grid-template-columns: repeat(4, 1fr);">
                 <button class="ppt-export-choice-btn ${exp.quality === 'low' ? 'is-active' : ''}" data-action="ppt-set-modal-export-quality" data-quality="low">
                   <b>⚡ Low (720p)</b>
                   <span>Fast / WhatsApp</span>
                 </button>
                 <button class="ppt-export-choice-btn ${(exp.quality || 'medium') === 'medium' ? 'is-active' : ''}" data-action="ppt-set-modal-export-quality" data-quality="medium">
                   <b>⭐ Medium (1080p)</b>
-                  <span>Crisp HD (Best)</span>
+                  <span>Crisp HD (Standard)</span>
+                </button>
+                <button class="ppt-export-choice-btn ${exp.quality === 'compact' ? 'is-active' : ''}" data-action="ppt-set-modal-export-quality" data-quality="compact" style="${exp.quality === 'compact' ? 'border-color:#16a34a; background:#f0fdf4;' : ''}">
+                  <b style="color:#16a34a;">⚡ Medium Lite</b>
+                  <span>Quality > Medium • Low Size</span>
                 </button>
                 <button class="ppt-export-choice-btn ${exp.quality === 'high' ? 'is-active' : ''}" data-action="ppt-set-modal-export-quality" data-quality="high">
                   <b>💎 Ultra (4K)</b>
@@ -232,84 +343,7 @@ export function renderExportModalHtml(state) {
 
           <!-- Right Column: Calculated Sets & Download Actions -->
           <div class="ppt-export-col-preview">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <h3 style="margin:0; font-size:13px; font-weight:700; color:#0f172a;">
-                ${exp.scope === 'sets' ? `Generated Sets (${calculatedSets.length} Sets Total)` : `Export Preview`}
-              </h3>
-              ${exp.scope === 'sets' ? `
-                <button class="ppt-export-btn-primary" data-action="ppt-batch-export-all-sets" style="padding:4px 10px; font-size:11px;">
-                  📦 Download All ${calculatedSets.length} Sets (Batch)
-                </button>
-              ` : ''}
-            </div>
-
-            <!-- Sets List / Single Download Container -->
-            <div class="ppt-export-sets-list">
-              ${exp.scope === 'sets' ? calculatedSets.map((s) => {
-                const targetFileName = formatFileName(exp.fileNamePattern, {
-                  topic: topicName,
-                  set: s.setNumber,
-                  start: s.startQNum,
-                  end: s.endQNum,
-                  quality: exp.quality
-                });
-
-                return `
-                  <div class="ppt-export-set-card">
-                    <div class="ppt-export-set-info">
-                      <div class="ppt-export-set-header">
-                        <span class="ppt-export-set-badge">Set ${s.setNumber}</span>
-                        <span class="ppt-export-set-range">Questions ${s.startQNum} – ${s.endQNum} (${s.qCount} Qs)</span>
-                        <span class="ppt-export-set-pages-badge">${s.totalSlideCount} Pages</span>
-                      </div>
-                      <div class="ppt-export-set-filename" title="${escapeHtml(targetFileName)}.pdf">
-                        📄 <b>${escapeHtml(targetFileName)}.pdf</b>
-                      </div>
-                      <div class="ppt-export-set-subdetail">
-                        Includes: ${s.prefixCount ? `Intro (${exp.mandatoryPrefix}) + ` : ''}Questions (${s.startQNum} to ${s.endQNum})${s.suffixCount ? ` + Exit (${exp.mandatorySuffix})` : ''}
-                      </div>
-                    </div>
-                    <div class="ppt-export-set-actions">
-                      <button class="ppt-export-set-btn-pdf" data-action="ppt-export-single-set-pdf" data-set-num="${s.setNumber}" title="Download Set ${s.setNumber} as PDF">
-                        📥 PDF
-                      </button>
-                      <button class="ppt-export-set-btn-pptx" data-action="ppt-export-single-set-pptx" data-set-num="${s.setNumber}" title="Download Set ${s.setNumber} as PowerPoint PPTX">
-                        📊 PPTX
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }).join("") : `
-                <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
-                  <div style="font-size:32px; margin-bottom:8px;">📄</div>
-                  <h4 style="margin:0 0 4px 0; color:#f0f6fc; font-size:14px;">
-                    ${exp.scope === 'range' ? `Custom Range: ${escapeHtml(exp.customRange || 'All')}` : `All Slides (1 to ${totalSlides})`}
-                  </h4>
-                  <div style="font-size:11px; color:#8b949e; margin-bottom:12px;">
-                    Target File: <b>${escapeHtml(formatFileName(exp.fileNamePattern, { topic: topicName, set: 1, start: 1, end: totalSlides, quality: exp.quality }))}.pdf</b>
-                  </div>
-                  <div style="display:flex; justify-content:center; gap:8px;">
-                    <button class="ppt-export-btn-primary" data-action="ppt-run-modal-single-pdf" style="padding:6px 14px; font-size:12px;">
-                      📥 Download PDF (${exp.quality.toUpperCase()})
-                    </button>
-                    <button class="ppt-export-btn-secondary" data-action="ppt-run-modal-single-pptx" style="padding:6px 14px; font-size:12px;">
-                      📊 Download PPTX
-                    </button>
-                  </div>
-                </div>
-              `}
-            </div>
-
-            <!-- Progress Bar (shown dynamically during batch/export) -->
-            <div class="ppt-export-progress-container" style="display:none; margin-top:8px;">
-              <div style="display:flex; justify-content:space-between; font-size:11px; color:#c9d1d9; margin-bottom:3px;">
-                <span class="ppt-export-progress-label">Exporting...</span>
-                <span class="ppt-export-progress-percent">0%</span>
-              </div>
-              <div class="ppt-export-progress-bar-bg">
-                <div class="ppt-export-progress-bar-fill" style="width:0%;"></div>
-              </div>
-            </div>
+            ${renderExportModalPreviewHtml(state)}
           </div>
         </div>
 

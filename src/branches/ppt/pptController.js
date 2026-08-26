@@ -1,29 +1,119 @@
 // PPT Slide Builder Controller (Events, Canvas Drag & Resize, Exports)
-import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings } from "../pptBranch.js";
-import { getQuestionImages } from "./pptUI.js";
-import { parseDocxFile, parseQuestionsText } from "../../core/docxParser.js";
-import { exportQuestionsToPdf } from "../../core/pdfExporter.js";
-import { exportQuestionsToPptx } from "../../core/pptxExporter.js";
-import { handleFullscreenAction, bindFullscreenEvents } from "./fullscreen/fullscreenController.js";
-import { renderThumbnailSlideHtml } from "./fullscreen/components/slideThumbnails.js";
-import { parseRangeToIndices, calculateBatchSets, formatFileName } from "./fullscreen/components/exportModal.js";
+import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings } from "../pptBranch.js?v=v93-drag-drop-perfect";
+import { getQuestionImages } from "./pptUI.js?v=v93-drag-drop-perfect";
+import { parseDocxFile, parseQuestionsText } from "../../core/docxParser.js?v=v93-drag-drop-perfect";
+import { exportQuestionsToPdf } from "../../core/pdfExporter.js?v=v93-drag-drop-perfect";
+import { exportQuestionsToPptx } from "../../core/pptxExporter.js?v=v93-drag-drop-perfect";
+import { handleFullscreenAction, bindFullscreenEvents } from "./fullscreen/fullscreenController.js?v=v93-drag-drop-perfect";
+import { renderThumbnailSlideHtml } from "./fullscreen/components/slideThumbnails.js?v=v93-drag-drop-perfect";
+import { parseRangeToIndices, calculateBatchSets, formatFileName, renderExportModalPreviewHtml } from "./fullscreen/components/exportModal.js?v=v96-export-hub-fix";
 
 
 
 export function isTargetCurrentScope(ppt) {
-  if (!ppt) return true;
-  // Home and Design tabs are Global Master Design Tabs
-  if (ppt.fsActiveTab === "home" || ppt.fsActiveTab === "design" || ppt.fsActiveTab === "home2") {
-    return ppt.applyScope === "current";
-  }
-  // Outside Home & Design (Editor, Insert, View, Canvas handles, etc.), all edits default to CURRENT SLIDE!
-  return true;
+  if (!ppt) return false;
+  // If the user checked "Current Slide Only", ANY edit on ANY tab (Home, Design, Editor, Insert, View, Canvas, Color, Font, Stretch) applies ONLY to the active slide!
+  return ppt.applyScope === "current";
 }
 
 let lastFocusedPptInput = null;
 let lastFocusedPptCanvasTarget = null;
 let lastActiveFormattingTarget = "english";
 let pptInputUndoTimer = null;
+let lastSavedRange = null;
+
+function saveCurrentSelection() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+    const range = sel.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const el = (container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement)?.closest("[contenteditable='true']");
+    if (el && el.closest(".ppt-slide-canvas-wrapper")) {
+      lastSavedRange = range.cloneRange();
+    }
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("selectionchange", saveCurrentSelection);
+  document.addEventListener("mouseup", saveCurrentSelection);
+  document.addEventListener("keyup", saveCurrentSelection);
+}
+
+export function syncCanvasEditableToState(el, state) {
+  if (!el) return;
+  const field = el.dataset.pptCanvasField;
+  const activeQ = state.ppt?.questions?.[state.ppt.activeQuestionIndex];
+  if (!activeQ) return;
+  const html = el.innerHTML;
+  const text = el.innerText || el.textContent || "";
+
+  if (field === "topic") {
+    activeQ.topicHtml = html;
+    activeQ.topic = text;
+    state.ppt.settings.topicHtml = html;
+    state.ppt.settings.topic = text;
+    if (state.ppt.applyScope === "all") {
+      state.ppt.questions.forEach((q) => {
+        q.topicHtml = html;
+        q.topic = text;
+      });
+    }
+    const ribbonInput = document.querySelector("[data-ppt-ribbon-topic]");
+    if (ribbonInput && document.activeElement !== ribbonInput) ribbonInput.value = text;
+  } else if (field === "english") {
+    activeQ.englishHtml = html;
+    activeQ.english = text;
+  } else if (field === "hindi") {
+    activeQ.hindiHtml = html;
+    activeQ.hindi = text;
+  } else if (field === "exam") {
+    activeQ.examHtml = html;
+    activeQ.exam = text;
+  } else if (field === "option") {
+    const oIdx = Number(el.dataset.pptCanvasOptIdx || 0);
+    if (!activeQ.options) activeQ.options = [];
+    if (!activeQ.options[oIdx]) activeQ.options[oIdx] = { key: String.fromCharCode(65 + oIdx), text: "" };
+    activeQ.options[oIdx].textHtml = html;
+    activeQ.options[oIdx].text = text;
+  } else if (field === "footer") {
+    state.ppt.settings.footerHtml = html;
+    state.ppt.settings.footerText = text;
+  }
+}
+
+export function applyInlineFormatting(command, value, app, state, saveState) {
+  let sel = window.getSelection();
+  let range = null;
+  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+    range = sel.getRangeAt(0);
+  } else if (lastSavedRange) {
+    range = lastSavedRange;
+  }
+
+  if (range && !range.collapsed) {
+    const container = range.commonAncestorContainer;
+    const el = (container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement)?.closest("[contenteditable='true']");
+    if (el && el.closest(".ppt-slide-canvas-wrapper")) {
+      el.focus();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      try {
+        document.execCommand("styleWithCSS", false, true);
+      } catch (err) {}
+      document.execCommand(command, false, value);
+      
+      if (sel.rangeCount > 0) {
+        lastSavedRange = sel.getRangeAt(0).cloneRange();
+      }
+      
+      syncCanvasEditableToState(el, state);
+      saveState(state);
+      return true;
+    }
+  }
+  return false;
+}
 
 
 export function ensurePptState(state) {
@@ -161,6 +251,25 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
     input.addEventListener("change", (e) => handlePptSettingInput(e, app, state, recordUndo, saveState));
   });
 
+  // Live input handler for Topic Ribbon Input
+  app.querySelectorAll("[data-ppt-ribbon-topic]").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const val = e.target.value;
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      if (activeQ) activeQ.topic = val;
+      state.ppt.settings.topic = val;
+      if (state.ppt.applyScope === "all") {
+        state.ppt.questions.forEach((q) => { q.topic = val; });
+      }
+      const canvasTopic = app.querySelector('.slide-topic-title[data-ppt-canvas-field="topic"]');
+      if (canvasTopic && document.activeElement !== canvasTopic) {
+        canvasTopic.textContent = val.toUpperCase();
+      }
+      updateLiveCanvasSlide(app, state, saveState);
+      saveState(state);
+    });
+  });
+
   // Toolbar font select
   const fontSel = app.querySelector('[data-ppt-tb-action="fontFamily"]');
   if (fontSel) {
@@ -203,26 +312,34 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
     colorInput.addEventListener("input", (e) => {
       recordUndo();
       const type = e.target.dataset.pptTbColor;
-      const isCurrentScope = isTargetCurrentScope(state.ppt);
+      const newColor = e.target.value;
 
+      // If text is selected on canvas, apply color ONLY to that selected text range
+      const cmd = (type === "highlightColor" || type === "hiliteColor") ? "hiliteColor" : "foreColor";
+      const appliedInline = applyInlineFormatting(cmd, newColor, app, state, saveState);
+      if (appliedInline) {
+        return;
+      }
+
+      const isCurrentScope = isTargetCurrentScope(state.ppt);
       const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
       const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : state.ppt.settings;
       const targetType = getActiveFormattingTarget(app);
 
       if (type === "textColor") {
         if (targetType === "options") {
-          targetObj.optionTextColor = e.target.value;
+          targetObj.optionTextColor = newColor;
         } else if (targetType === "hindi") {
-          targetObj.hindiColor = e.target.value;
+          targetObj.hindiColor = newColor;
         } else if (targetType === "topic") {
-          targetObj.topicColor = e.target.value;
+          targetObj.topicColor = newColor;
         } else if (targetType === "exam") {
-          targetObj.examColor = e.target.value;
+          targetObj.examColor = newColor;
         } else {
-          targetObj.engColor = e.target.value;
+          targetObj.engColor = newColor;
         }
       } else if (type === "highlightColor") {
-        targetObj.highlightColor = e.target.value;
+        targetObj.highlightColor = newColor;
       }
       updateLiveCanvasSlide(app, state, saveState);
       updateToolbarDisplay(app, state);
@@ -246,12 +363,15 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
     });
   });
 
-  // Format toggles
+  // Format toggles (Bold, Italic, Underline, etc.)
   app.querySelectorAll("[data-ppt-tb-format]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const format = btn.dataset.pptTbFormat;
-      document.execCommand(format, false, null);
+      const appliedInline = applyInlineFormatting(format, null, app, state, saveState);
+      if (!appliedInline) {
+        document.execCommand(format, false, null);
+      }
       btn.classList.toggle("is-active", document.queryCommandState(format));
     });
   });
@@ -261,14 +381,17 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
     inp.addEventListener("input", (e) => {
       state.ppt.exportSettings = state.ppt.exportSettings || {};
       const field = e.target.dataset.pptExportField;
+
       if (field === "chunkSize") {
         state.ppt.exportSettings[field] = Number(e.target.value) || 25;
       } else {
         state.ppt.exportSettings[field] = e.target.value;
       }
       saveState(state);
-      if (state.ppt.isExportModalOpen) {
-        render();
+
+      const previewCol = app.querySelector(".ppt-export-col-preview");
+      if (previewCol) {
+        previewCol.innerHTML = renderExportModalPreviewHtml(state);
       }
     });
   });
@@ -277,6 +400,7 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
   initCanvasResizeHandles(app, state, recordUndo, saveState, render);
   updateToolbarDisplay(app, state);
   bindFullscreenEvents(app, state, render, recordUndo, saveState);
+  initSlideImageDragAndDrop(app, state, recordUndo, saveState, render);
 
   const activeEmbeddedThumb = app.querySelector(".ppt-slide-card.is-active") || app.querySelector(".ppt-sidebar-item.is-active");
   if (activeEmbeddedThumb) {
@@ -536,11 +660,18 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       }
       break;
     }
+    case "ppt-toggle-global-current-scope": {
+      recordUndo();
+      ppt.applyScope = (target.checked || ppt.applyScope !== "current") ? "current" : "all";
+      saveState(state);
+      render();
+      break;
+    }
     case "ppt-set-scope": {
-
       const scope = target.dataset.scope || "all";
       recordUndo();
       ppt.applyScope = scope;
+      saveState(state);
       render();
       break;
     }
@@ -690,6 +821,19 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
         }
       });
 
+
+      // Copy Topic to global settings and all slides from active slide or live canvas
+      const canvasTopicEl = app.querySelector('.slide-topic-title[data-ppt-canvas-field="topic"]');
+      const liveTopicVal = (canvasTopicEl && canvasTopicEl.textContent.trim()) ? canvasTopicEl.textContent.trim() : (activeQ?.topic || ppt.settings.topic);
+      if (liveTopicVal) {
+        if (activeQ) activeQ.topic = liveTopicVal;
+        ppt.settings.topic = liveTopicVal;
+        ppt.questions.forEach((q) => {
+          q.topic = liveTopicVal;
+        });
+        const ribbonTopicInput = app.querySelector("[data-ppt-ribbon-topic]");
+        if (ribbonTopicInput) ribbonTopicInput.value = liveTopicVal;
+      }
 
       ppt.applyScope = "all";
       saveState(state);
@@ -850,24 +994,94 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       if (fileInput) fileInput.click();
       break;
     }
+    case "ppt-open-paste-modal":
     case "ppt-open-paste-box": {
+      ppt.isPasteModalOpen = true;
       ppt.showPasteBox = true;
       render();
       break;
     }
+    case "ppt-close-paste-modal":
     case "ppt-close-paste-box": {
+      ppt.isPasteModalOpen = false;
       ppt.showPasteBox = false;
+      render();
+      break;
+    }
+    case "ppt-paste-from-clipboard-btn": {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then((clipText) => {
+          const textarea = app.querySelector("[data-ppt-paste-input]");
+          if (textarea && clipText) {
+            textarea.value = clipText;
+          }
+        }).catch((err) => {
+          console.warn("Clipboard read error:", err);
+        });
+      }
+      break;
+    }
+    case "ppt-load-sample-paste": {
+      const textarea = app.querySelector("[data-ppt-paste-input]");
+      if (textarea) {
+        textarea.value = `Q.1 If x + y = 10 and x - y = 4, find the value of x.
+यदि x + y = 10 और x - y = 4 है, तो x का मान ज्ञात कीजिए।
+(A) 7
+(B) 6
+(C) 5
+(D) 3
+[TOPIC: ALGEBRA]
+Ans: A (SSC CGL 2024 Tier-1 Shift 1)
+
+Q.2 In how many years will a sum become 3.5 times itself at 14% SI?
+एक धनराशि 14% साधारण ब्याज पर कितने वर्षों में स्वयं की 3.5 गुनी हो जाएगी?
+(A) 15 years
+(B) 18 years
+(C) 20 years
+(D) 25 years
+[TOPIC: SIMPLE INTEREST]
+Ans: C (SSC GD 2024 Shift 2)`;
+      }
+      break;
+    }
+    case "ppt-apply-topic-to-all": {
+      recordUndo();
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const canvasTopicEl = app.querySelector('.slide-topic-title[data-ppt-canvas-field="topic"]');
+      const ribbonTopicInput = app.querySelector("[data-ppt-ribbon-topic]");
+      
+      let topicVal = "";
+      if (document.activeElement === canvasTopicEl && canvasTopicEl.textContent.trim()) {
+        topicVal = canvasTopicEl.textContent.trim();
+      } else if (ribbonTopicInput && ribbonTopicInput.value.trim()) {
+        topicVal = ribbonTopicInput.value.trim();
+      } else if (canvasTopicEl && canvasTopicEl.textContent.trim()) {
+        topicVal = canvasTopicEl.textContent.trim();
+      } else {
+        topicVal = activeQ?.topic || ppt.settings.topic || "TOPIC";
+      }
+
+      if (activeQ) activeQ.topic = topicVal;
+      ppt.settings.topic = topicVal;
+      ppt.questions.forEach((q) => {
+        q.topic = topicVal;
+      });
+      if (ribbonTopicInput) ribbonTopicInput.value = topicVal;
+      updateLiveCanvasSlide(app, state, saveState);
+      saveState(state);
       render();
       break;
     }
     case "ppt-process-paste": {
       const textarea = app.querySelector("[data-ppt-paste-input]");
+      const topicInput = app.querySelector("[data-ppt-paste-topic]") || app.querySelector("[data-ppt-ribbon-topic]");
+      const defaultTopic = (topicInput && topicInput.value.trim()) ? topicInput.value.trim() : (ppt.settings.topic || "TOPIC");
       const rawText = textarea ? textarea.value : "";
       if (!rawText.trim()) {
         alert("Please paste question text.");
         return;
       }
-      const parsed = parseQuestionsText(rawText, ppt.settings.topic);
+      const parsed = parseQuestionsText(rawText, defaultTopic);
       if (parsed.length) {
         recordUndo();
         ppt.pendingImportQuestions = parsed;
@@ -878,10 +1092,12 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
           questionBoxWidth: 56,
           optionStyle: "clean",
           theme: "dark",
+          topic: defaultTopic,
           ...(pptThemes?.dark || {})
         };
         ppt.showImportWizard = true;
         ppt.showPasteBox = false;
+        ppt.isPasteModalOpen = false;
         render();
       } else {
         alert("Could not parse any questions. Please check the format.");
@@ -909,6 +1125,30 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       }
       break;
     }
+    case "ppt-move-slide-up": {
+      const idx = Number(target.dataset.slideIndex ?? ppt.activeQuestionIndex);
+      if (idx > 0 && idx < ppt.questions.length) {
+        recordUndo();
+        const [moved] = ppt.questions.splice(idx, 1);
+        ppt.questions.splice(idx - 1, 0, moved);
+        ppt.activeQuestionIndex = idx - 1;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-move-slide-down": {
+      const idx = Number(target.dataset.slideIndex ?? ppt.activeQuestionIndex);
+      if (idx >= 0 && idx < ppt.questions.length - 1) {
+        recordUndo();
+        const [moved] = ppt.questions.splice(idx, 1);
+        ppt.questions.splice(idx + 1, 0, moved);
+        ppt.activeQuestionIndex = idx + 1;
+        saveState(state);
+        render();
+      }
+      break;
+    }
     case "ppt-select-slide":
     case "ppt-jump-slide": {
       const slideBtn = target.closest("[data-slide-index]");
@@ -922,12 +1162,17 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     }
     case "ppt-add-slide": {
       recordUndo();
-      const newIndex = ppt.questions.length + 1;
-      ppt.questions.push({
+      const currentIdx = (ppt.activeQuestionIndex >= 0 && ppt.activeQuestionIndex < ppt.questions.length) 
+        ? ppt.activeQuestionIndex 
+        : (ppt.questions.length - 1);
+      const insertIdx = currentIdx + 1;
+      const newIndex = insertIdx + 1;
+      const newSlide = {
         id: `q_${Date.now()}`,
         number: `Q.${newIndex}`,
         exam: ppt.settings.defaultExam || "SSC CGL (Shift 1)",
         topic: ppt.settings.topic || "TOPIC",
+        topicHtml: ppt.settings.topicHtml || "",
         english: "",
         hindi: "",
         options: [
@@ -936,15 +1181,21 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
           { key: "C", text: "" },
           { key: "D", text: "" }
         ]
-      });
-      ppt.activeQuestionIndex = ppt.questions.length - 1;
+      };
+      ppt.questions.splice(insertIdx, 0, newSlide);
+      ppt.activeQuestionIndex = insertIdx;
+      saveState(state);
       render();
       break;
     }
     case "ppt-add-blank-slide": {
       recordUndo();
-      const newIndex = ppt.questions.length + 1;
-      ppt.questions.push({
+      const currentIdx = (ppt.activeQuestionIndex >= 0 && ppt.activeQuestionIndex < ppt.questions.length) 
+        ? ppt.activeQuestionIndex 
+        : (ppt.questions.length - 1);
+      const insertIdx = currentIdx + 1;
+      const newIndex = insertIdx + 1;
+      const newSlide = {
         id: `q_${Date.now()}`,
         number: `Slide ${newIndex}`,
         layout: "blank",
@@ -958,8 +1209,10 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
           showDivider: false,
           showFooter: false
         }
-      });
-      ppt.activeQuestionIndex = ppt.questions.length - 1;
+      };
+      ppt.questions.splice(insertIdx, 0, newSlide);
+      ppt.activeQuestionIndex = insertIdx;
+      saveState(state);
       render();
       break;
     }
@@ -1077,7 +1330,10 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     }
     case "ppt-trigger-docx-upload": {
       const fileInput = app.querySelector(".ppt-fs-docx-hidden-input") || app.querySelector("[data-ppt-file-input]");
-      if (fileInput) fileInput.click();
+      if (fileInput) {
+        fileInput.value = "";
+        fileInput.click();
+      }
       break;
     }
     case "ppt-upload-docx": {
@@ -1089,7 +1345,10 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     }
     case "ppt-trigger-bg-image-upload": {
       const fileInput = app.querySelector(".ppt-fs-bg-image-hidden-input") || app.querySelector("[data-ppt-bg-image-input]");
-      if (fileInput) fileInput.click();
+      if (fileInput) {
+        fileInput.value = "";
+        fileInput.click();
+      }
       break;
     }
     case "ppt-upload-bg-image": {
@@ -1268,8 +1527,14 @@ function handlePptCanvasInput(e, app, state, recordUndo, saveState) {
     if (input && document.activeElement !== input) input.value = text;
   } else if (field === "topic") {
     activeQ.topic = text;
+    state.ppt.settings.topic = text;
     const input = app.querySelector('[data-ppt-q-field="topic"]');
     if (input && document.activeElement !== input) input.value = text;
+    const ribbonTopicInput = app.querySelector("[data-ppt-ribbon-topic]");
+    if (ribbonTopicInput && document.activeElement !== ribbonTopicInput) ribbonTopicInput.value = text;
+    if (state.ppt.applyScope === "all") {
+      state.ppt.questions.forEach((q) => { q.topic = text; });
+    }
   } else if (field === "option") {
     const oIdx = Number(e.target.dataset.pptCanvasOptIdx || 0);
     if (!activeQ.options) activeQ.options = [];
@@ -1286,6 +1551,7 @@ function handlePptCanvasInput(e, app, state, recordUndo, saveState) {
     if (footerInput && document.activeElement !== footerInput) footerInput.value = text;
   }
 
+  syncCanvasEditableToState(e.target, state);
   updateLiveCanvasSlide(app, state, saveState);
   saveState(state);
 }
@@ -1297,6 +1563,13 @@ function handlePptSettingInput(e, app, state, recordUndo, saveState) {
   const key = e.target.dataset.pptSetting;
   let val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
   if (e.target.type === "range") val = Number(val);
+
+  if (e.target.type === "color" && (key === "engColor" || key === "hindiColor" || key === "topicColor" || key === "optionTextColor" || key === "examTagColor" || key === "footerColor")) {
+    const appliedInline = applyInlineFormatting("foreColor", val, app, state, saveState);
+    if (appliedInline) {
+      return;
+    }
+  }
 
   const isCurrentScope = isTargetCurrentScope(state.ppt);
 
@@ -1438,7 +1711,8 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
     resizableBoxes.forEach((box) => {
       box.addEventListener("mousemove", (e) => {
         if (e.target.closest(".canva-handle") || e.target.closest(".slide-image-delete-btn")) return;
-        const onBorder = isEventOnBorderOrPill(e, box);
+        const isImage = box.classList.contains("slide-image-container");
+        const onBorder = isImage || isEventOnBorderOrPill(e, box);
         if (onBorder) {
           box.style.cursor = "move";
         } else {
@@ -1450,6 +1724,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
       box.addEventListener("mousedown", (e) => {
         if (e.target.closest(".canva-handle") || e.target.closest(".canva-pill-action") || e.target.closest(".slide-image-delete-btn")) return;
 
+        const isImage = box.classList.contains("slide-image-container");
         const isMultiToggle = e.shiftKey || e.ctrlKey;
         if (isMultiToggle) {
           box.classList.toggle("is-selected");
@@ -1460,7 +1735,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           }
         }
 
-        const onBorder = isEventOnBorderOrPill(e, box);
+        const onBorder = isImage || isEventOnBorderOrPill(e, box);
         if (!onBorder) {
           return;
         }
@@ -1619,7 +1894,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           const deltaY = (moveEvent.clientY - startY) / zoomScale;
           const deltaPercent = (deltaX / (wrapperRect.width / zoomScale)) * 100;
 
-          const clampW = (initialW, delta) => Math.round(Math.max(30, Math.min(100, (initialW || 100) + delta)));
+          const clampW = (initialW, delta) => Math.round(Math.max(10, Math.min(250, (initialW || 100) + delta)));
 
           if (type === "eng-position") {
             setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
@@ -1704,22 +1979,28 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
             targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
             targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
           } else if (type === "image-resize-se" && targetImg) {
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + deltaX));
+            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? deltaX : (deltaY * imgAspect);
+            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
-            targetImg.height = Math.round(newW / imgAspect);
+            targetImg.height = newH;
           } else if (type === "image-resize-sw" && targetImg) {
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) - deltaX));
+            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? -deltaX : (deltaY * imgAspect);
+            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
-            targetImg.height = Math.round(newW / imgAspect);
+            targetImg.height = newH;
             targetImg.posX = Math.round((initialImage.posX || 0) + ((initialImage.width || 320) - newW));
           } else if (type === "image-resize-ne" && targetImg) {
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + deltaX));
+            const cornerDelta = (Math.abs(deltaX) > Math.abs(-deltaY * imgAspect)) ? deltaX : (-deltaY * imgAspect);
+            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
             targetImg.posY = Math.round((initialImage.posY || 0) + ((initialImage.height || 180) - newH));
           } else if (type === "image-resize-nw" && targetImg) {
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) - deltaX));
+            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? -deltaX : (-deltaY * imgAspect);
+            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
@@ -1829,7 +2110,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     if (pureBlank) {
       pureBlank.style.fontFamily = settings.engFontFamily || "Segoe UI, Arial, sans-serif";
       pureBlank.style.fontSize = `${settings.engFontSize || 20}px`;
-      if (typeof document !== "undefined" && document.activeElement !== pureBlank) {
+      if (typeof document !== "undefined" && document.activeElement !== pureBlank && !pureBlank.contains(document.activeElement)) {
         pureBlank.textContent = activeQ.english || "";
       }
     }
@@ -1864,7 +2145,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
       const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
       qBadge.style.color = settings.qBadgeColor || defaultQColor;
       qBadge.style.fontSize = `${settings.qBadgeSize || 18}px`;
-      if (typeof document !== "undefined" && document.activeElement !== qBadge) {
+      if (typeof document !== "undefined" && document.activeElement !== qBadge && !qBadge.contains(document.activeElement)) {
         qBadge.textContent = activeQ.number || `Q.${ppt.activeQuestionIndex + 1}`;
       }
     });
@@ -1880,7 +2161,13 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     if (examTitle) {
       examTitle.style.color = settings.examColor || "#FFFFFF";
       examTitle.style.fontSize = `${settings.examFontSize || 19}px`;
-      examTitle.textContent = activeQ.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+      if (typeof document !== "undefined" && document.activeElement !== examTitle && !examTitle.contains(document.activeElement)) {
+        if (activeQ.examHtml) {
+          examTitle.innerHTML = activeQ.examHtml;
+        } else {
+          examTitle.textContent = activeQ.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+        }
+      }
     }
 
 
@@ -1892,7 +2179,13 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     if (topicTitle) {
       topicTitle.style.color = settings.topicColor || "#FFD700";
       topicTitle.style.fontSize = `${settings.topicFontSize || 20}px`;
-      topicTitle.textContent = (activeQ.topic || settings.topic || "TOPIC").toUpperCase();
+      if (typeof document !== "undefined" && document.activeElement !== topicTitle && !topicTitle.contains(document.activeElement)) {
+        if (activeQ.topicHtml || settings.topicHtml) {
+          topicTitle.innerHTML = activeQ.topicHtml || settings.topicHtml;
+        } else {
+          topicTitle.textContent = (activeQ.topic || settings.topic || "TOPIC").toUpperCase();
+        }
+      }
     }
 
     // Slide Body Area
@@ -1919,8 +2212,12 @@ export function updateLiveCanvasSlide(app, state, saveState) {
       engText.style.fontFamily = settings.engFontFamily || "Segoe UI, Arial, sans-serif";
       engText.style.textAlign = settings.textAlign || "left";
       engText.style.lineHeight = settings.lineHeight || 1.36;
-      if (typeof document !== "undefined" && document.activeElement !== engText) {
-        engText.textContent = activeQ.english || "English question will appear here...";
+      if (typeof document !== "undefined" && document.activeElement !== engText && !engText.contains(document.activeElement)) {
+        if (activeQ.englishHtml) {
+          engText.innerHTML = activeQ.englishHtml;
+        } else {
+          engText.textContent = activeQ.english || "English question will appear here...";
+        }
       }
     }
 
@@ -1951,8 +2248,12 @@ export function updateLiveCanvasSlide(app, state, saveState) {
       hindiText.style.fontFamily = settings.hindiFontFamily || "Mangal, Noto Sans Devanagari, Arial, sans-serif";
       hindiText.style.textAlign = settings.textAlign || "left";
       hindiText.style.lineHeight = settings.lineHeight || 1.38;
-      if (typeof document !== "undefined" && document.activeElement !== hindiText) {
-        hindiText.textContent = activeQ.hindi || "हिंदी प्रश्न यहाँ दिखाई देगा...";
+      if (typeof document !== "undefined" && document.activeElement !== hindiText && !hindiText.contains(document.activeElement)) {
+        if (activeQ.hindiHtml) {
+          hindiText.innerHTML = activeQ.hindiHtml;
+        } else {
+          hindiText.textContent = activeQ.hindi || "हिंदी प्रश्न यहाँ दिखाई देगा...";
+        }
       }
     }
 
@@ -1974,8 +2275,12 @@ export function updateLiveCanvasSlide(app, state, saveState) {
         tagEl.style.borderRadius = radius;
         tagEl.style.padding = `${padY}px ${padX}px`;
         tagEl.style.boxShadow = settings.examTagStyle === "pill" ? "0 2px 6px rgba(0,0,0,0.35)" : "none";
-        if (typeof document !== "undefined" && document.activeElement !== tagEl) {
-          tagEl.textContent = activeQ.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+        if (typeof document !== "undefined" && document.activeElement !== tagEl && !tagEl.contains(document.activeElement)) {
+          if (activeQ.examHtml) {
+            tagEl.innerHTML = activeQ.examHtml;
+          } else {
+            tagEl.textContent = activeQ.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+          }
         }
       }
 
@@ -2022,8 +2327,12 @@ export function updateLiveCanvasSlide(app, state, saveState) {
           textEl.style.fontSize = `${settings.optionFontSize || 18}px`;
           textEl.style.fontFamily = settings.optionFontFamily || settings.engFontFamily || "Segoe UI, Arial, sans-serif";
           textEl.style.textAlign = settings.optionAlign || "left";
-          if (typeof document !== "undefined" && document.activeElement !== textEl) {
-            textEl.textContent = opt.text || "";
+          if (typeof document !== "undefined" && document.activeElement !== textEl && !textEl.contains(document.activeElement)) {
+            if (opt.textHtml) {
+              textEl.innerHTML = opt.textHtml;
+            } else {
+              textEl.textContent = opt.text || "";
+            }
           }
         }
       });
@@ -2050,7 +2359,13 @@ export function updateLiveCanvasSlide(app, state, saveState) {
       footerBar.style.color = settings.footerColor || "#FFFFFF";
       footerBar.style.height = `${settings.footerHeight || 28}px`;
       footerBar.style.fontSize = `${settings.footerFontSize || 13}px`;
-      footerBar.textContent = settings.footerText || "";
+      if (typeof document !== "undefined" && document.activeElement !== footerBar && !footerBar.contains(document.activeElement)) {
+        if (settings.footerHtml) {
+          footerBar.innerHTML = settings.footerHtml;
+        } else {
+          footerBar.textContent = settings.footerText || "";
+        }
+      }
     }
   });
 
@@ -2162,6 +2477,92 @@ export function pastePptImageFromClipboard(app, state, recordUndo, saveState, re
     const diagInput = app.querySelector("[data-ppt-diagram-file-input]");
     if (diagInput) diagInput.click();
   });
+}
+
+export function initSlideImageDragAndDrop(app, state, recordUndo, saveState, render) {
+  const canvasContainers = app.querySelectorAll(".ppt-fs-center-pane, .ppt-fs-stage-container, .ppt-slide-canvas-wrapper, .ppt-preview-stage-container");
+
+  canvasContainers.forEach((container) => {
+    container.addEventListener("dragenter", (e) => {
+      if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+        e.preventDefault();
+        container.classList.add("ppt-image-dragover");
+      }
+    });
+
+    container.addEventListener("dragover", (e) => {
+      if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        container.classList.add("ppt-image-dragover");
+      }
+    });
+
+    container.addEventListener("dragleave", (e) => {
+      if (!container.contains(e.relatedTarget)) {
+        container.classList.remove("ppt-image-dragover");
+      }
+    });
+
+    container.addEventListener("drop", async (e) => {
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (!files.length) return;
+
+      const imageFiles = files.filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(f.name));
+      const docxFiles = files.filter((f) => /\.(docx|txt)$/i.test(f.name));
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        container.classList.remove("ppt-image-dragover");
+
+        for (let i = 0; i < imageFiles.length; i++) {
+          const file = imageFiles[i];
+          const reader = new FileReader();
+          reader.onload = (loadEvt) => {
+            attachImageToActiveSlide(loadEvt.target.result, app, state, recordUndo, saveState, render);
+          };
+          reader.readAsDataURL(file);
+        }
+        return;
+      }
+
+      if (docxFiles.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        container.classList.remove("ppt-image-dragover");
+        await processUploadedPptFile(docxFiles[0], app, state, recordUndo, render);
+        return;
+      }
+    });
+  });
+
+  // Global window drop handler to prevent browser navigating away when dragging image from download shelf
+  window.addEventListener("dragover", (e) => {
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+      e.preventDefault();
+    }
+  }, false);
+
+  window.addEventListener("drop", (e) => {
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+      const isOverCanvas = e.target.closest(".ppt-fs-center-pane, .ppt-fs-stage-container, .ppt-slide-canvas-wrapper, .ppt-preview-stage-container");
+      if (!isOverCanvas && state.mode === "ppt-builder") {
+        const files = Array.from(e.dataTransfer?.files || []);
+        const imageFiles = files.filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|svg|gif|bmp)$/i.test(f.name));
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          for (const file of imageFiles) {
+            const reader = new FileReader();
+            reader.onload = (loadEvt) => {
+              attachImageToActiveSlide(loadEvt.target.result, app, state, recordUndo, saveState, render);
+            };
+            reader.readAsDataURL(file);
+          }
+        }
+      }
+    }
+  }, false);
 }
 
 export function handlePptSlideNavKeydown(event, state, recordUndo, render, saveState) {
@@ -2637,6 +3038,15 @@ export async function handlePptExportSingleSetPdf(setNum, app, state) {
   ensurePptState(state);
   const ppt = state.ppt;
   const exp = ppt.exportSettings || {};
+  const prefixInp = app.querySelector('[data-ppt-export-field="mandatoryPrefix"]');
+  const suffixInp = app.querySelector('[data-ppt-export-field="mandatorySuffix"]');
+  const chunkInp = app.querySelector('[data-ppt-export-field="chunkSize"]');
+  const nameInp = app.querySelector('[data-ppt-export-field="fileNamePattern"]');
+  if (prefixInp) exp.mandatoryPrefix = prefixInp.value;
+  if (suffixInp) exp.mandatorySuffix = suffixInp.value;
+  if (chunkInp) exp.chunkSize = Number(chunkInp.value) || 25;
+  if (nameInp) exp.fileNamePattern = nameInp.value;
+
   const questions = ppt.questions || [];
   const sets = calculateBatchSets(questions.length, exp.chunkSize, exp.mandatoryPrefix, exp.mandatorySuffix);
   const setObj = sets.find((s) => s.setNumber === setNum);
@@ -2645,7 +3055,10 @@ export async function handlePptExportSingleSetPdf(setNum, app, state) {
     return;
   }
 
-  const topicName = (questions[0] || {}).topic || ppt.settings?.topic || "Maths_Questions";
+  const topicName = (ppt.settings && ppt.settings.topic && ppt.settings.topic !== "TOPIC")
+    ? ppt.settings.topic
+    : ((questions[0] && questions[0].topic && questions[0].topic !== "TOPIC") ? questions[0].topic : (ppt.settings?.topic || "Maths_Questions"));
+
   const customFileName = formatFileName(exp.fileNamePattern, {
     topic: topicName,
     set: setObj.setNumber,
@@ -2676,12 +3089,24 @@ export async function handlePptExportSingleSetPptx(setNum, app, state) {
   ensurePptState(state);
   const ppt = state.ppt;
   const exp = ppt.exportSettings || {};
+  const prefixInp = app.querySelector('[data-ppt-export-field="mandatoryPrefix"]');
+  const suffixInp = app.querySelector('[data-ppt-export-field="mandatorySuffix"]');
+  const chunkInp = app.querySelector('[data-ppt-export-field="chunkSize"]');
+  const nameInp = app.querySelector('[data-ppt-export-field="fileNamePattern"]');
+  if (prefixInp) exp.mandatoryPrefix = prefixInp.value;
+  if (suffixInp) exp.mandatorySuffix = suffixInp.value;
+  if (chunkInp) exp.chunkSize = Number(chunkInp.value) || 25;
+  if (nameInp) exp.fileNamePattern = nameInp.value;
+
   const questions = ppt.questions || [];
   const sets = calculateBatchSets(questions.length, exp.chunkSize, exp.mandatoryPrefix, exp.mandatorySuffix);
   const setObj = sets.find((s) => s.setNumber === setNum);
   if (!setObj) return;
 
-  const topicName = (questions[0] || {}).topic || ppt.settings?.topic || "Maths_Questions";
+  const topicName = (ppt.settings && ppt.settings.topic && ppt.settings.topic !== "TOPIC")
+    ? ppt.settings.topic
+    : ((questions[0] && questions[0].topic && questions[0].topic !== "TOPIC") ? questions[0].topic : (ppt.settings?.topic || "Maths_Questions"));
+
   const customFileName = formatFileName(exp.fileNamePattern, {
     topic: topicName,
     set: setObj.setNumber,
@@ -2709,6 +3134,15 @@ export async function handlePptBatchExportAllSets(app, state) {
   ensurePptState(state);
   const ppt = state.ppt;
   const exp = ppt.exportSettings || {};
+  const prefixInp = app.querySelector('[data-ppt-export-field="mandatoryPrefix"]');
+  const suffixInp = app.querySelector('[data-ppt-export-field="mandatorySuffix"]');
+  const chunkInp = app.querySelector('[data-ppt-export-field="chunkSize"]');
+  const nameInp = app.querySelector('[data-ppt-export-field="fileNamePattern"]');
+  if (prefixInp) exp.mandatoryPrefix = prefixInp.value;
+  if (suffixInp) exp.mandatorySuffix = suffixInp.value;
+  if (chunkInp) exp.chunkSize = Number(chunkInp.value) || 25;
+  if (nameInp) exp.fileNamePattern = nameInp.value;
+
   const questions = ppt.questions || [];
   const sets = calculateBatchSets(questions.length, exp.chunkSize, exp.mandatoryPrefix, exp.mandatorySuffix);
   if (!sets.length) {
@@ -2725,7 +3159,9 @@ export async function handlePptBatchExportAllSets(app, state) {
   if (progressBox) progressBox.style.display = "block";
   if (batchBtn) batchBtn.disabled = true;
 
-  const topicName = (questions[0] || {}).topic || ppt.settings?.topic || "Maths_Questions";
+  const topicName = (ppt.settings && ppt.settings.topic && ppt.settings.topic !== "TOPIC")
+    ? ppt.settings.topic
+    : ((questions[0] && questions[0].topic && questions[0].topic !== "TOPIC") ? questions[0].topic : (ppt.settings?.topic || "Maths_Questions"));
 
   try {
     for (let i = 0; i < sets.length; i++) {

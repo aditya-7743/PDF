@@ -19,10 +19,11 @@ export async function exportQuestionsToPdf(questions, rawSettings, qualityMode =
   }
 
   const qualityConfig = {
-    low: { scale: 1.333, width: 1280, height: 720, jpegQuality: 0.75 },
+    low: { scale: 1.333, width: 1280, height: 720, jpegQuality: 0.65 },
     medium: { scale: 2.0, width: 1920, height: 1080, jpegQuality: 0.90 },
+    compact: { scale: 2.666, width: 2560, height: 1440, jpegQuality: 0.70 },
     high: { scale: 4.0, width: 3840, height: 2160, jpegQuality: 0.96 }
-  }[qualityMode] || { scale: 2.0, width: 1920, height: 1080, jpegQuality: 0.90 };
+  }[qualityMode] || { scale: 2.666, width: 2560, height: 1440, jpegQuality: 0.70 };
 
   // Determine slides to render (support selectedIndices or all questions)
   const itemsToRender = Array.isArray(options.selectedIndices) && options.selectedIndices.length > 0
