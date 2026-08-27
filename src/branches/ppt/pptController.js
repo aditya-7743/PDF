@@ -2224,50 +2224,82 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
             setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
           }
 
-          // Exact Proportional & Side Image Resizing
+          // Exact Proportional & Side Image Resizing (Pinned 1:1 to Mouse Cursor)
           else if (type === "image-position" && targetImg) {
             targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
             targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
           } else if (type === "image-resize-se" && targetImg) {
-            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? deltaX : (deltaY * imgAspect);
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const initW = initialImage.width || 320;
+            const initH = initialImage.height || 180;
+            const diag = Math.sqrt(initW * initW + initH * initH);
+            const proj = (deltaX * initW + deltaY * initH) / diag;
+            const scale = Math.max(0.08, (diag + proj) / diag);
+            const newW = Math.round(Math.max(30, initW * scale));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
           } else if (type === "image-resize-sw" && targetImg) {
-            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? -deltaX : (deltaY * imgAspect);
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const initW = initialImage.width || 320;
+            const initH = initialImage.height || 180;
+            const diag = Math.sqrt(initW * initW + initH * initH);
+            const proj = (-deltaX * initW + deltaY * initH) / diag;
+            const scale = Math.max(0.08, (diag + proj) / diag);
+            const newW = Math.round(Math.max(30, initW * scale));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
-            targetImg.posX = Math.round((initialImage.posX || 0) + ((initialImage.width || 320) - newW));
+            targetImg.posX = Math.round((initialImage.posX || 0) + (initW - newW));
           } else if (type === "image-resize-ne" && targetImg) {
-            const cornerDelta = (Math.abs(deltaX) > Math.abs(-deltaY * imgAspect)) ? deltaX : (-deltaY * imgAspect);
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const initW = initialImage.width || 320;
+            const initH = initialImage.height || 180;
+            const diag = Math.sqrt(initW * initW + initH * initH);
+            const proj = (deltaX * initW - deltaY * initH) / diag;
+            const scale = Math.max(0.08, (diag + proj) / diag);
+            const newW = Math.round(Math.max(30, initW * scale));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
-            targetImg.posY = Math.round((initialImage.posY || 0) + ((initialImage.height || 180) - newH));
+            targetImg.posY = Math.round((initialImage.posY || 0) + (initH - newH));
           } else if (type === "image-resize-nw" && targetImg) {
-            const cornerDelta = (Math.abs(deltaX) > Math.abs(deltaY * imgAspect)) ? -deltaX : (-deltaY * imgAspect);
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) + cornerDelta));
+            const initW = initialImage.width || 320;
+            const initH = initialImage.height || 180;
+            const diag = Math.sqrt(initW * initW + initH * initH);
+            const proj = (-deltaX * initW - deltaY * initH) / diag;
+            const scale = Math.max(0.08, (diag + proj) / diag);
+            const newW = Math.round(Math.max(30, initW * scale));
             const newH = Math.round(newW / imgAspect);
             targetImg.width = newW;
             targetImg.height = newH;
-            targetImg.posX = Math.round((initialImage.posX || 0) + ((initialImage.width || 320) - newW));
-            targetImg.posY = Math.round((initialImage.posY || 0) + ((initialImage.height || 180) - newH));
+            targetImg.posX = Math.round((initialImage.posX || 0) + (initW - newW));
+            targetImg.posY = Math.round((initialImage.posY || 0) + (initH - newH));
           } else if (type === "image-resize-e" && targetImg) {
-            targetImg.width = Math.round(Math.max(40, (initialImage.width || 320) + deltaX));
+            targetImg.width = Math.round(Math.max(30, (initialImage.width || 320) + deltaX));
           } else if (type === "image-resize-w" && targetImg) {
-            const newW = Math.round(Math.max(40, (initialImage.width || 320) - deltaX));
-            targetImg.posX = Math.round((initialImage.posX || 0) + ((initialImage.width || 320) - newW));
+            const initW = initialImage.width || 320;
+            const newW = Math.round(Math.max(30, initW - deltaX));
+            targetImg.posX = Math.round((initialImage.posX || 0) + (initW - newW));
             targetImg.width = newW;
           } else if (type === "image-resize-s" && targetImg) {
             targetImg.height = Math.round(Math.max(30, (initialImage.height || 180) + deltaY));
           } else if (type === "image-resize-n" && targetImg) {
-            const newH = Math.round(Math.max(30, (initialImage.height || 180) - deltaY));
-            targetImg.posY = Math.round((initialImage.posY || 0) + ((initialImage.height || 180) - newH));
+            const initH = initialImage.height || 180;
+            const newH = Math.round(Math.max(30, initH - deltaY));
+            targetImg.posY = Math.round((initialImage.posY || 0) + (initH - newH));
             targetImg.height = newH;
+          } else if (type === "image-rotation" && targetImg) {
+            const centerX = (initialImage.posX || 0) + (initialImage.width || 320) / 2;
+            const centerY = (initialImage.posY || 0) + (initialImage.height || 180) / 2;
+            const mouseCanvasX = (moveEvent.clientX - wrapperRect.left) / zoomScale;
+            const mouseCanvasY = (moveEvent.clientY - wrapperRect.top) / zoomScale;
+            const rad = Math.atan2(mouseCanvasY - centerY, mouseCanvasX - centerX);
+            let deg = Math.round(rad * (180 / Math.PI)) - 90;
+            if (deg < 0) deg += 360;
+            if (deg >= 360) deg -= 360;
+            if (Math.abs(deg - 0) < 4 || Math.abs(deg - 360) < 4) deg = 0;
+            if (Math.abs(deg - 90) < 4) deg = 90;
+            if (Math.abs(deg - 180) < 4) deg = 180;
+            if (Math.abs(deg - 270) < 4) deg = 270;
+            targetImg.rotation = deg;
           }
 
           else if (type === "header-height") {

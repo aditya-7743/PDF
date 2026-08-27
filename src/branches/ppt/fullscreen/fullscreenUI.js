@@ -13,7 +13,6 @@ import { renderSlideCanvas } from "./components/slideCanvas.js";
 import { renderStatusBar } from "./components/statusBar.js";
 import { renderExportModalHtml } from "./components/exportModal.js";
 import { renderPasteModalHtml } from "./components/pasteModal.js";
-import { renderImageCropModalHtml } from "../components/imageCropModal.js";
 import { renderPptImportWizardModal } from "../pptUI.js";
 
 export function renderPptFullscreenOverlay(state) {
@@ -101,11 +100,10 @@ export function renderPptFullscreenOverlay(state) {
       <!-- 5. Bottom Status Bar -->
       ${renderStatusBar(state)}
 
-      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub, Crop Modal) -->
+      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub) -->
       ${ppt.showImportWizard ? renderPptImportWizardModal(state) : ""}
       ${ppt.isPasteModalOpen ? renderPasteModalHtml(state) : ""}
       ${ppt.isExportModalOpen ? renderExportModalHtml(state) : ""}
-      ${ppt.activeCrop ? renderImageCropModalHtml(state) : ""}
     </div>
   `;
 }

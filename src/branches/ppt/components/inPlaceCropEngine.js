@@ -11,8 +11,9 @@ export function openInPlaceCrop(imgId, app, state, render) {
   const dataUrl = typeof targetImg === "string" ? targetImg : targetImg.dataUrl;
   if (!dataUrl) return;
 
-  const width = targetImg.width || 360;
-  const height = targetImg.height || 202;
+  const boxEl = app?.querySelector?.(`.slide-image-container[data-image-id="${targetImg.id || imgId}"]`);
+  const width = targetImg.width || (boxEl ? boxEl.offsetWidth : 360);
+  const height = targetImg.height || (boxEl ? boxEl.offsetHeight : 202);
 
   state.ppt.activeCrop = {
     imgId: targetImg.id || imgId,
