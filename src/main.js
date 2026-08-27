@@ -164,6 +164,7 @@ function loadInitialState() {
       ppt: {
         ...blankState.ppt,
         ...(parsed.ppt || {}),
+        activeCrop: null,
         settings: { ...blankState.ppt.settings, ...(parsed.ppt?.settings || {}) },
         questions: pptQuestions
       }
