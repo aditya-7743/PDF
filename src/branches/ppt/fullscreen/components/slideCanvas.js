@@ -260,22 +260,112 @@ export function renderSlideCanvas(state) {
           </div>
 
           <!-- Slide Diagrams / Graphs / Images Floating Layer (Support Multiple Images) -->
-          ${getQuestionImages(activeQ).map((img, imgIdx) => `
-            <div class="canva-transform-box slide-image-container ppt-resizable-box ${imgIdx === 0 ? 'is-selected' : ''}" data-image-id="${img.id || `img_${imgIdx}`}" data-image-index="${imgIdx}" style="transform:translate(${(img.posX || 0)}px, ${(img.posY || 0)}px); width:${(img.width || 360)}px; height:${(img.height || 202)}px; z-index:${40 + imgIdx};">
-              <div class="slide-image-wrapper">
-                <img src="${typeof img === 'string' ? img : img.dataUrl}" alt="Question Diagram ${imgIdx + 1}" />
+          ${getQuestionImages(activeQ).map((img, imgIdx) => {
+            const selectedImgId = ppt.selectedImageId;
+            const isSelected = selectedImgId ? ((img.id || `img_${imgIdx}`) === selectedImgId) : (imgIdx === 0);
+            const isCropping = !!(ppt.activeCrop && (ppt.activeCrop.imgId === (img.id || `img_${imgIdx}`) || ppt.activeCrop.imgId === img));
+            const opacityVal = img.opacity !== undefined ? img.opacity : 100;
+            const brightVal = img.brightness !== undefined ? img.brightness : 0;
+            const contrastVal = img.contrast !== undefined ? img.contrast : 0;
+            let filterCss = `opacity(${opacityVal}%) brightness(${100 + Number(brightVal)}%) contrast(${100 + Number(contrastVal)}%)`;
+            if (img.filter === "grayscale") filterCss += " grayscale(100%)";
+            else if (img.filter === "invert") filterCss += " invert(100%)";
+            else if (img.filter === "high-contrast") filterCss += " contrast(180%) brightness(110%)";
+            else if (img.filter === "gold") filterCss += " sepia(80%) saturate(200%) hue-rotate(5deg)";
+            else if (img.filter === "blue") filterCss += " sepia(50%) saturate(200%) hue-rotate(180deg)";
+
+            const rot = img.rotation || 0;
+            const scX = img.flipH ? -1 : 1;
+            const scY = img.flipV ? -1 : 1;
+            const transformStyle = `translate(${(img.posX || 0)}px, ${(img.posY || 0)}px) rotate(${rot}deg) scale(${scX}, ${scY})`;
+
+            return `
+              <div class="canva-transform-box slide-image-container ppt-resizable-box ${isSelected ? 'is-selected' : ''} ${isCropping ? 'is-cropping' : ''}" data-image-id="${img.id || `img_${imgIdx}`}" data-image-index="${imgIdx}" style="transform:${transformStyle}; width:${(img.width || 360)}px; height:${(img.height || 202)}px; z-index:${40 + imgIdx};">
+                <div class="slide-image-wrapper">
+                  <img src="${typeof img === 'string' ? img : img.dataUrl}" alt="Question Diagram ${imgIdx + 1}" style="filter:${filterCss};" />
+                </div>
+
+                ${!isCropping ? `
+                  <!-- Top Rotation Stem & Handle (Matches Pic 1) -->
+                  <div class="canva-rotation-stem"></div>
+                  <div class="canva-rotation-handle" data-ppt-resize-type="image-rotation" data-image-id="${img.id || `img_${imgIdx}`}" title="Rotate Image">🔄</div>
+
+                  <!-- 8 Canva Node Handles (Matches Pic 1) -->
+                  <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="image-resize-nw" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
+                  <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="image-resize-ne" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
+                  <div class="canva-handle canva-corner canva-se" data-ppt-resize-type="image-resize-se" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
+                  <div class="canva-handle canva-corner canva-sw" data-ppt-resize-type="image-resize-sw" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
+                  <div class="canva-handle canva-edge canva-n" data-ppt-resize-type="image-resize-n" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Height"></div>
+                  <div class="canva-handle canva-edge canva-s" data-ppt-resize-type="image-resize-s" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Height"></div>
+                  <div class="canva-handle canva-edge canva-e" data-ppt-resize-type="image-resize-e" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Width"></div>
+                  <div class="canva-handle canva-edge canva-w" data-ppt-resize-type="image-resize-w" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Width"></div>
+
+                  <!-- Floating Quick Action Pill (Matches Pic 1) -->
+                  ${isSelected ? `
+                    <div class="slide-image-floating-toolbar" role="toolbar">
+                      <button type="button" class="slide-img-tb-btn" data-action="ppt-fs-tab" data-tab="insert" title="Edit in Insert Ribbon">
+                        ✏️ Edit image ✨
+                      </button>
+                      <span class="slide-img-tb-sep"></span>
+                      <button type="button" class="slide-img-tb-btn" data-action="ppt-remove-image-bg" data-image-id="${img.id || `img_${imgIdx}`}" title="Remove Background (Transparent)">
+                        🪄 Remove BG
+                      </button>
+                      <button type="button" class="slide-img-tb-btn" data-action="ppt-trigger-crop-mode" data-image-id="${img.id || `img_${imgIdx}`}" title="Crop Image">
+                        ✂️ Crop
+                      </button>
+                      <button type="button" class="slide-img-tb-btn is-delete" data-action="ppt-remove-image" data-image-id="${img.id || `img_${imgIdx}`}" title="Delete Image">
+                        🗑️
+                      </button>
+                    </div>
+                  ` : ''}
+                ` : `
+                  <!-- In-Place Crop Mode Frame & 8 Corner/Edge Brackets (Matches Pic 2) -->
+                  <div class="slide-inplace-crop-overlay">
+                    <!-- Faint outer boundary outline showing full uncropped image bounds -->
+                    <div class="slide-crop-dimmed-bounds"></div>
+
+                    <!-- Interactive Crop Window with bright clipped image inside -->
+                    <div class="slide-crop-active-frame">
+                      <div class="slide-crop-clipped-inner">
+                        <img src="${typeof img === 'string' ? img : img.dataUrl}" style="filter:${filterCss};" />
+                      </div>
+
+                      <!-- 3x3 Grid -->
+                      <div class="slide-crop-grid-line h-1"></div>
+                      <div class="slide-crop-grid-line h-2"></div>
+                      <div class="slide-crop-grid-line v-1"></div>
+                      <div class="slide-crop-grid-line v-2"></div>
+
+                      <!-- 4 Thick L-Shaped Corner Brackets (Pic 2) -->
+                      <div class="slide-crop-corner-bracket nw" data-inplace-crop-handle="nw"></div>
+                      <div class="slide-crop-corner-bracket ne" data-inplace-crop-handle="ne"></div>
+                      <div class="slide-crop-corner-bracket se" data-inplace-crop-handle="se"></div>
+                      <div class="slide-crop-corner-bracket sw" data-inplace-crop-handle="sw"></div>
+
+                      <!-- 4 Side Edge Bars (Pic 2) -->
+                      <div class="slide-crop-edge-bar n" data-inplace-crop-handle="n"></div>
+                      <div class="slide-crop-edge-bar s" data-inplace-crop-handle="s"></div>
+                      <div class="slide-crop-edge-bar e" data-inplace-crop-handle="e"></div>
+                      <div class="slide-crop-edge-bar w" data-inplace-crop-handle="w"></div>
+                    </div>
+
+                    <!-- Floating Crop Action Pill (Matches Pic 2 & User Request) -->
+                    <div class="slide-crop-action-bar">
+                      <button type="button" class="slide-crop-btn-done" data-action="ppt-crop-apply" title="Finalize Crop (Enter)">
+                        ✓ Done
+                      </button>
+                      <button type="button" class="slide-crop-btn-cancel" data-action="ppt-crop-cancel" title="Cancel Crop (Esc)">
+                        ✕ Cancel
+                      </button>
+                      <button type="button" class="slide-crop-btn-reset" data-action="ppt-crop-reset" title="Reset Crop Frame">
+                        ↺ Reset
+                      </button>
+                    </div>
+                  </div>
+                `}
               </div>
-              <button type="button" class="slide-image-delete-btn" data-action="ppt-remove-image" data-image-id="${img.id || `img_${imgIdx}`}" title="Delete Image">✕</button>
-              <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="image-resize-nw" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
-              <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="image-resize-ne" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
-              <div class="canva-handle canva-corner canva-se" data-ppt-resize-type="image-resize-se" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
-              <div class="canva-handle canva-corner canva-sw" data-ppt-resize-type="image-resize-sw" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize"></div>
-              <div class="canva-handle canva-edge canva-n" data-ppt-resize-type="image-resize-n" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Height"></div>
-              <div class="canva-handle canva-edge canva-s" data-ppt-resize-type="image-resize-s" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Height"></div>
-              <div class="canva-handle canva-edge canva-e" data-ppt-resize-type="image-resize-e" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Width"></div>
-              <div class="canva-handle canva-edge canva-w" data-ppt-resize-type="image-resize-w" data-image-id="${img.id || `img_${imgIdx}`}" title="Resize Width"></div>
-            </div>
-          `).join("")}
+            `;
+          }).join("")}
 
 
           <!-- Footer Bar (If Enabled) with Height Handle -->
@@ -311,7 +401,7 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
   if (isBlankSlide) {
     return `
       <div class="ppt-slide-canvas-wrapper ppt-blank-slide-canvas" style="${bgStyle}">
-        <div class="ppt-pure-blank-canvas" style="width:100%; height:100%; color:#111111; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; font-size:${settings.engFontSize || 20}px;">${escapeHtml(activeQ.english || '')}</div>
+        <div class="ppt-pure-blank-canvas" style="width:100%; height:100%; color:#111111; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; font-size:${settings.engFontSize || 20}px;">${activeQ.englishHtml || escapeHtml(activeQ.english || '')}</div>
         ${getQuestionImages(activeQ).map((img, imgIdx) => `
           <div class="slide-image-container" style="position:absolute; transform:translate(${(img.posX || 0)}px, ${(img.posY || 0)}px); width:${(img.width || 360)}px; height:${(img.height || 202)}px; z-index:${40 + imgIdx};">
             <div class="slide-image-wrapper">
@@ -339,17 +429,17 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
       <div class="slide-header-bar" style="display:${settings.showHeader !== false ? 'flex' : 'none'}; background:${settings.headerBg || '#7A0000'}; height:${settings.headerHeight || 64}px;">
         <div class="slide-q-badge-box" style="transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px); display:${settings.showQBadge !== false ? 'inline-flex' : 'none'};">
           <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || '#7A0000'}; font-size:${settings.qBadgeSize || 18}px;">
-            ${escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
+            ${activeQ.numberHtml || escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
           </div>
         </div>
         <div class="slide-exam-header-box" style="transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px); display:${settings.showExamTag !== false && examTagPos === 'header' ? 'inline-flex' : 'none'};">
           <div class="slide-exam-title" style="color:${settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
-            ${escapeHtml(activeQ.exam || settings.defaultExam || 'SSC CGL (Shift 1)')}
+            ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || 'SSC CGL (Shift 1)')}
           </div>
         </div>
         <div class="slide-topic-box" style="transform:translate(${settings.topicPosX || 0}px, ${settings.topicPosY || 0}px);">
           <div class="slide-topic-title" style="color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px;">
-            ${escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
+            ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
           </div>
         </div>
       </div>
@@ -359,13 +449,13 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
         <!-- Standalone Q. Badge when Header is Hidden (Custom Template Mode) -->
         <div class="slide-standalone-q-badge-box" style="display:${settings.showHeader === false && settings.showQBadge !== false ? 'inline-flex' : 'none'}; align-items:center; margin-bottom:8px; transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px);">
           <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || (settings.theme === 'purple' ? '#4C1D95' : (settings.theme === 'navy' ? '#0A1931' : '#7A0000'))}; font-size:${settings.qBadgeSize || 18}px; padding:4px 14px; border-radius:14px; font-weight:800; box-shadow: 0 2px 6px rgba(0,0,0,0.35);">
-            ${escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
+            ${activeQ.numberHtml || escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
           </div>
         </div>
 
         <!-- English Question -->
         <div class="slide-freeform-box slide-eng-section" style="display:${settings.showEnglish !== false ? 'flex' : 'none'}; flex-direction:column; justify-content:${settings.valign === 'middle' || settings.valign === 'center' ? 'center' : (settings.valign === 'bottom' ? 'flex-end' : 'flex-start')}; transform:translate(${settings.engPosX || 0}px, ${settings.engPosY || 0}px); width:${settings.engWidth ? `${settings.engWidth}%` : '100%'};">
-          <div class="slide-eng-text" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 18}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${escapeHtml(activeQ.english || '')}</div>
+          <div class="slide-eng-text" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 18}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${activeQ.englishHtml || escapeHtml(activeQ.english || '')}</div>
         </div>
 
         <!-- Divider Line -->
@@ -375,7 +465,7 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
 
         <!-- Hindi Question -->
         <div class="slide-freeform-box slide-hindi-section" style="display:${settings.showHindi !== false ? 'flex' : 'none'}; flex-direction:column; justify-content:${settings.valign === 'middle' || settings.valign === 'center' ? 'center' : (settings.valign === 'bottom' ? 'flex-end' : 'flex-start')}; transform:translate(${settings.hindiPosX || 0}px, ${settings.hindiPosY || 0}px); width:${settings.hindiWidth ? `${settings.hindiWidth}%` : '100%'};">
-          <div class="slide-hindi-text" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 17}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${escapeHtml(activeQ.hindi || '')}</div>
+          <div class="slide-hindi-text" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 17}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.34};">${activeQ.hindiHtml || escapeHtml(activeQ.hindi || '')}</div>
         </div>
 
         <!-- Standalone Exam Tag Section -->
@@ -389,7 +479,7 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
             font-weight:800;
             box-shadow:${examTagStyle === 'pill' ? '0 2px 6px rgba(0,0,0,0.35)' : 'none'};
           ">
-            ${escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
+            ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
           </div>
         </div>
 
@@ -406,7 +496,7 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
                 ${settings.optionStyle === 'clean' ? `(${(opt.key || String.fromCharCode(65 + oIdx)).toLowerCase()})` : (opt.key || String.fromCharCode(65 + oIdx))}
               </div>
               <div class="slide-opt-text" style="color:${settings.optionTextColor || (settings.optionStyle === 'clean' && settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
-                ${escapeHtml(opt.text || '')}
+                ${opt.textHtml || escapeHtml(opt.text || '')}
               </div>
             </div>
           `).join("")}
@@ -414,17 +504,34 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
       </div>
 
       <!-- Slide Floating Images Layer -->
-      ${getQuestionImages(activeQ).map((img, imgIdx) => `
-        <div class="slide-image-container" style="position:absolute; transform:translate(${(img.posX || 0)}px, ${(img.posY || 0)}px); width:${(img.width || 360)}px; height:${(img.height || 202)}px; z-index:${40 + imgIdx};">
-          <div class="slide-image-wrapper">
-            <img src="${typeof img === 'string' ? img : img.dataUrl}" alt="Question Diagram ${imgIdx + 1}" />
+      ${getQuestionImages(activeQ).map((img, imgIdx) => {
+        const opacityVal = img.opacity !== undefined ? img.opacity : 100;
+        const brightVal = img.brightness !== undefined ? img.brightness : 0;
+        const contrastVal = img.contrast !== undefined ? img.contrast : 0;
+        let filterCss = `opacity(${opacityVal}%) brightness(${100 + Number(brightVal)}%) contrast(${100 + Number(contrastVal)}%)`;
+        if (img.filter === "grayscale") filterCss += " grayscale(100%)";
+        else if (img.filter === "invert") filterCss += " invert(100%)";
+        else if (img.filter === "high-contrast") filterCss += " contrast(180%) brightness(110%)";
+        else if (img.filter === "gold") filterCss += " sepia(80%) saturate(200%) hue-rotate(5deg)";
+        else if (img.filter === "blue") filterCss += " sepia(50%) saturate(200%) hue-rotate(180deg)";
+
+        const rot = img.rotation || 0;
+        const scX = img.flipH ? -1 : 1;
+        const scY = img.flipV ? -1 : 1;
+        const transformStyle = `translate(${(img.posX || 0)}px, ${(img.posY || 0)}px) rotate(${rot}deg) scale(${scX}, ${scY})`;
+
+        return `
+          <div class="slide-image-container" style="position:absolute; transform:${transformStyle}; width:${(img.width || 360)}px; height:${(img.height || 202)}px; z-index:${40 + imgIdx};">
+            <div class="slide-image-wrapper">
+              <img src="${typeof img === 'string' ? img : img.dataUrl}" alt="Question Diagram ${imgIdx + 1}" style="filter:${filterCss};" />
+            </div>
           </div>
-        </div>
-      `).join("")}
+        `;
+      }).join("")}
 
       <!-- Footer Bar -->
       <div class="slide-footer-bar" style="display:${isBlankSlide || settings.showFooter === false ? 'none' : 'flex'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
-        ${escapeHtml(settings.footerText || '')}
+        ${settings.footerHtml || escapeHtml(settings.footerText || '')}
       </div>
     </div>
   `;

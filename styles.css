@@ -4292,69 +4292,390 @@ body.is-resizing-columns {
   display: flex;
 }
 
+.slide-image-container.is-selected {
+  outline: 2px solid #0066ff !important;
+  box-shadow: 0 0 0 1px #ffffff, 0 4px 16px rgba(0, 102, 255, 0.3) !important;
+  z-index: 60 !important;
+}
+
 /* 4 Corner Circular Node Handles */
 .slide-image-container .canva-handle {
   position: absolute;
-  background: #ffffff;
-  border: 1.5px solid #0066cc;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  background: #ffffff !important;
+  border: 2.5px solid #0066ff !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;
   display: none;
-  z-index: 50;
+  z-index: 100 !important;
   box-sizing: border-box;
 }
 
 .slide-image-container.is-selected .canva-handle,
 .slide-image-container:hover .canva-handle {
-  display: block;
+  display: block !important;
 }
 
 .slide-image-container .canva-corner {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
 }
-.slide-image-container .canva-nw { top: -5px; left: -5px; cursor: nwse-resize; }
-.slide-image-container .canva-ne { top: -5px; right: -5px; cursor: nesw-resize; }
-.slide-image-container .canva-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
-.slide-image-container .canva-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.slide-image-container .canva-nw { top: -7px !important; left: -7px !important; cursor: nwse-resize; }
+.slide-image-container .canva-ne { top: -7px !important; right: -7px !important; cursor: nesw-resize; }
+.slide-image-container .canva-se { bottom: -7px !important; right: -7px !important; cursor: nwse-resize; }
+.slide-image-container .canva-sw { bottom: -7px !important; left: -7px !important; cursor: nesw-resize; }
 
 /* 4 Side Capsule Pill Handles */
 .slide-image-container .canva-edge.canva-n {
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 16px;
-  height: 6px;
-  border-radius: 3px;
+  top: -6px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 22px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
   cursor: ns-resize;
 }
 .slide-image-container .canva-edge.canva-s {
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 16px;
-  height: 6px;
-  border-radius: 3px;
+  bottom: -6px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 22px !important;
+  height: 8px !important;
+  border-radius: 4px !important;
   cursor: ns-resize;
 }
 .slide-image-container .canva-edge.canva-e {
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 16px;
-  border-radius: 3px;
+  right: -6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 8px !important;
+  height: 22px !important;
+  border-radius: 4px !important;
   cursor: ew-resize;
 }
 .slide-image-container .canva-edge.canva-w {
-  left: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 16px;
-  border-radius: 3px;
+  left: -6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 8px !important;
+  height: 22px !important;
+  border-radius: 4px !important;
   cursor: ew-resize;
 }
+
+/* Top Rotation Stem & Handle (Matches Pic 1) */
+.canva-rotation-stem {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 26px;
+  background: #0066ff;
+  display: none;
+  z-index: 90;
+  pointer-events: none;
+}
+.canva-rotation-handle {
+  position: absolute;
+  top: -42px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #0066ff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: grab;
+  z-index: 110;
+  user-select: none;
+  touch-action: none;
+}
+.canva-rotation-handle:hover {
+  background: #eff6ff;
+  transform: translateX(-50%) scale(1.15);
+}
+.slide-image-container.is-selected .canva-rotation-stem,
+.slide-image-container.is-selected .canva-rotation-handle {
+  display: flex !important;
+}
+
+/* Floating Quick Action Pill Below Selected Image (Matches Pic 1) */
+.slide-image-floating-toolbar {
+  position: absolute;
+  bottom: -46px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 24px;
+  padding: 4px 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 120;
+  white-space: nowrap;
+  user-select: none;
+  animation: popInTb 0.15s ease-out;
+}
+@keyframes popInTb {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.slide-img-tb-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: #1e293b;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+.slide-img-tb-btn:hover {
+  background: #f1f5f9;
+  color: #2563eb;
+}
+.slide-img-tb-btn.is-delete {
+  color: #ef4444;
+}
+.slide-img-tb-btn.is-delete:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.slide-img-tb-sep {
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 2px;
+}
+
+/* In-Place Crop Mode Styling (Matches Pic 2 & Canva) */
+.slide-image-container.is-cropping {
+  outline: none !important;
+  box-shadow: none !important;
+  z-index: 200 !important;
+}
+.slide-image-container.is-cropping .slide-image-wrapper img {
+  opacity: 0.35 !important;
+}
+.slide-inplace-crop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+}
+.slide-crop-dimmed-bounds {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  border-radius: 2px;
+}
+.slide-crop-active-frame {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid #ffffff;
+  box-sizing: border-box;
+  touch-action: none;
+  cursor: move;
+  overflow: visible !important;
+}
+.slide-crop-clipped-inner {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.slide-crop-clipped-inner img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+/* 4 Thick L-Shaped Corner Brackets (Matches Pic 2) */
+.slide-crop-corner-bracket {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  z-index: 50 !important;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+}
+.slide-crop-corner-bracket.nw {
+  top: -2px;
+  left: -2px;
+  border-top: 5px solid #000000;
+  border-left: 5px solid #000000;
+  outline: 1.5px solid #ffffff;
+  cursor: nwse-resize;
+}
+.slide-crop-corner-bracket.ne {
+  top: -2px;
+  right: -2px;
+  border-top: 5px solid #000000;
+  border-right: 5px solid #000000;
+  outline: 1.5px solid #ffffff;
+  cursor: nesw-resize;
+}
+.slide-crop-corner-bracket.se {
+  bottom: -2px;
+  right: -2px;
+  border-bottom: 5px solid #000000;
+  border-right: 5px solid #000000;
+  outline: 1.5px solid #ffffff;
+  cursor: nwse-resize;
+}
+.slide-crop-corner-bracket.sw {
+  bottom: -2px;
+  left: -2px;
+  border-bottom: 5px solid #000000;
+  border-left: 5px solid #000000;
+  outline: 1.5px solid #ffffff;
+  cursor: nesw-resize;
+}
+
+/* 4 Thick Side Edge Bars (Matches Pic 2) */
+.slide-crop-edge-bar {
+  position: absolute;
+  background: #000000;
+  outline: 1.5px solid #ffffff;
+  border-radius: 1px;
+  z-index: 50 !important;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+}
+.slide-crop-edge-bar.n {
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 5px;
+  cursor: ns-resize;
+}
+.slide-crop-edge-bar.s {
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 5px;
+  cursor: ns-resize;
+}
+.slide-crop-edge-bar.e {
+  right: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 26px;
+  cursor: ew-resize;
+}
+.slide-crop-edge-bar.w {
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 26px;
+  cursor: ew-resize;
+}
+
+/* 3x3 Grid Lines */
+.slide-crop-grid-line {
+  position: absolute;
+  pointer-events: none;
+}
+.slide-crop-grid-line.h-1 {
+  left: 0; right: 0; top: 33.33%;
+  border-top: 1px dashed rgba(255, 255, 255, 0.5);
+}
+.slide-crop-grid-line.h-2 {
+  left: 0; right: 0; top: 66.66%;
+  border-top: 1px dashed rgba(255, 255, 255, 0.5);
+}
+.slide-crop-grid-line.v-1 {
+  top: 0; bottom: 0; left: 33.33%;
+  border-left: 1px dashed rgba(255, 255, 255, 0.5);
+}
+.slide-crop-grid-line.v-2 {
+  top: 0; bottom: 0; left: 66.66%;
+  border-left: 1px dashed rgba(255, 255, 255, 0.5);
+}
+
+/* Floating Crop Action Bar with Tick button (Matches Pic 2) */
+.slide-crop-action-bar {
+  position: absolute;
+  bottom: -48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f172a;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 30px;
+  padding: 5px 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+  z-index: 250;
+  white-space: nowrap;
+}
+.slide-crop-btn-done {
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 5px 14px;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
+  transition: transform 0.1s ease;
+}
+.slide-crop-btn-done:hover {
+  background: #15803d;
+  transform: scale(1.05);
+}
+.slide-crop-btn-cancel {
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+}
+.slide-crop-btn-cancel:hover {
+  background: #b91c1c;
+}
+.slide-crop-btn-reset {
+  background: #334155;
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+}
+.slide-crop-btn-reset:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
 
 
 /* Topic, Q-Badge & Exam Header Boxes with Drag Handles */
@@ -6073,4 +6394,307 @@ body.is-resizing-columns {
   justify-content: space-between;
   align-items: center;
 }
+
+/* ==========================================================================
+   Image Crop Mode Engine
+   ========================================================================== */
+.ppt-crop-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+.ppt-crop-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.ppt-crop-container {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 95vw;
+  max-height: 95vh;
+}
+.ppt-crop-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: #0f172a;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 30px;
+  padding: 6px 18px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+.ppt-crop-bar-left,
+.ppt-crop-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ppt-crop-badge {
+  color: #38bdf8;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.ppt-crop-ratio-group {
+  display: flex;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 18px;
+}
+.ppt-crop-ratio-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.ppt-crop-ratio-btn:hover {
+  color: #ffffff;
+}
+.ppt-crop-ratio-btn.is-active {
+  background: #2563eb;
+  color: #ffffff;
+}
+.ppt-crop-btn-apply {
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(22, 163, 74, 0.45);
+  transition: all 0.12s ease;
+}
+.ppt-crop-btn-apply:hover {
+  background: #15803d;
+  transform: scale(1.03);
+}
+.ppt-crop-btn-cancel {
+  background: #dc2626;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.ppt-crop-btn-cancel:hover {
+  background: #b91c1c;
+}
+.ppt-crop-btn-reset {
+  background: #334155;
+  color: #e2e8f0;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.ppt-crop-btn-reset:hover {
+  background: #475569;
+  color: #ffffff;
+}
+.ppt-crop-stage {
+  position: relative;
+  max-width: 88vw;
+  max-height: 74vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+.ppt-crop-viewport {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+  line-height: 0;
+  overflow: hidden;
+}
+.ppt-crop-image {
+  display: block;
+  max-width: 82vw;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ppt-crop-box {
+  position: absolute;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+  cursor: move;
+  touch-action: none;
+  z-index: 5;
+  box-sizing: border-box;
+}
+.ppt-crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ppt-crop-grid-h:nth-child(1) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 33.333%;
+  border-top: 1px dashed rgba(255, 255, 255, 0.45);
+}
+.ppt-crop-grid-h:nth-child(2) {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 66.666%;
+  border-top: 1px dashed rgba(255, 255, 255, 0.45);
+}
+.ppt-crop-grid-v:nth-child(3) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 33.333%;
+  border-left: 1px dashed rgba(255, 255, 255, 0.45);
+}
+.ppt-crop-grid-v:nth-child(4) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 66.666%;
+  border-left: 1px dashed rgba(255, 255, 255, 0.45);
+}
+.ppt-crop-handle {
+  position: absolute;
+  z-index: 10;
+  box-sizing: border-box;
+}
+/* 4 Thick Photoshop-style Crop Corner Brackets */
+.ppt-crop-corner {
+  width: 16px;
+  height: 16px;
+}
+.ppt-crop-nw {
+  top: -3px;
+  left: -3px;
+  border-top: 3.5px solid #ffffff;
+  border-left: 3.5px solid #ffffff;
+  cursor: nwse-resize;
+}
+.ppt-crop-ne {
+  top: -3px;
+  right: -3px;
+  border-top: 3.5px solid #ffffff;
+  border-right: 3.5px solid #ffffff;
+  cursor: nesw-resize;
+}
+.ppt-crop-se {
+  bottom: -3px;
+  right: -3px;
+  border-bottom: 3.5px solid #ffffff;
+  border-right: 3.5px solid #ffffff;
+  cursor: nwse-resize;
+}
+.ppt-crop-sw {
+  bottom: -3px;
+  left: -3px;
+  border-bottom: 3.5px solid #ffffff;
+  border-left: 3.5px solid #ffffff;
+  cursor: nesw-resize;
+}
+/* 4 Mid Edge Handles */
+.ppt-crop-edge {
+  background: #ffffff;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.ppt-crop-n {
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 4px;
+  cursor: ns-resize;
+}
+.ppt-crop-s {
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 4px;
+  cursor: ns-resize;
+}
+.ppt-crop-e {
+  right: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  cursor: ew-resize;
+}
+.ppt-crop-w {
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  cursor: ew-resize;
+}
+.ppt-crop-footer-hint {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.ppt-fs-slider-sm {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.ppt-fs-slider-sm::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #2563eb;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease;
+}
+.ppt-fs-slider-sm::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+
 

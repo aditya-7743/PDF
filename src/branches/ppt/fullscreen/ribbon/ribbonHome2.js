@@ -10,6 +10,19 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
 
   return `
     <div class="ppt-fs-ribbon-panel" role="toolbar" aria-label="Home 2 Customizer Ribbon">
+      <!-- 0. Undo / Redo History Group -->
+      <div class="ppt-fs-ribbon-group">
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
+          <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-undo" title="Undo (Ctrl+Z)">
+            <span>↶ Undo</span>
+          </button>
+          <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-redo" title="Redo (Ctrl+Y)">
+            <span>↷ Redo</span>
+          </button>
+        </div>
+        <div class="ppt-fs-ribbon-group-title">History</div>
+      </div>
+
       <!-- 1. Colours for Everything (Color Pickers) -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:grid; grid-template-columns: repeat(5, auto); gap:3px 6px; font-size:11px; align-items:center;">
@@ -109,13 +122,33 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
         <div class="ppt-fs-ribbon-group-title">Options Layout</div>
       </div>
 
-      <!-- 5. Footer Related & Apply Scope -->
+      <!-- 5. Options Size & Gap Controls -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; align-items:center; gap:3px;">
-            <input type="text" class="ppt-fs-input-text" data-ppt-setting="footerText" value="${escapeHtml(settings.footerText || 'Maths by Aditya | Telegram: @YourChannel')}" placeholder="Footer text..." style="width:140px; font-size:11px;" />
+            <span style="font-size:10px; font-weight:600; color:#475569;" title="Card Gap between options">Gap:</span>
+            <input type="number" class="ppt-fs-input-num" data-ppt-setting="optionGap" value="${settings.optionGap !== undefined ? settings.optionGap : 10}" min="0" max="40" step="1" style="width:38px; text-align:center;" title="Option Gap (px)" />
+            <span style="font-size:10px; font-weight:600; color:#475569; margin-left:3px;" title="Box Height / Vertical Padding">Size:</span>
+            <input type="number" class="ppt-fs-input-num" data-ppt-setting="optionCardPadding" value="${settings.optionCardPadding !== undefined ? settings.optionCardPadding : 8}" min="2" max="30" step="1" style="width:38px; text-align:center;" title="Box Size / Padding (px)" />
           </div>
           <div style="display:flex; align-items:center; gap:3px;">
+            <span style="font-size:10px; font-weight:600; color:#475569;" title="Corner Radius / Roundness">Radius:</span>
+            <input type="number" class="ppt-fs-input-num" data-ppt-setting="optionCardRadius" value="${settings.optionCardRadius !== undefined ? settings.optionCardRadius : 8}" min="0" max="30" step="1" style="width:38px; text-align:center;" title="Corner Radius (px)" />
+            <span style="font-size:10px; font-weight:600; color:#475569; margin-left:3px;" title="Overall Width %">Width:</span>
+            <input type="range" data-ppt-setting="optionWidthPercent" min="50" max="100" value="${settings.optionWidthPercent || 96}" style="width:52px; accent-color:#2563eb;" title="Width (%)" />
+            <span style="font-size:10px; font-weight:700; color:#0f172a;">${settings.optionWidthPercent || 96}%</span>
+          </div>
+        </div>
+        <div class="ppt-fs-ribbon-group-title">Options Size & Gap</div>
+      </div>
+
+      <!-- 6. Footer Bar Group -->
+      <div class="ppt-fs-ribbon-group">
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
+          <div style="display:flex; align-items:center; gap:3px;">
+            <input type="text" class="ppt-fs-input-text" data-ppt-setting="footerText" value="${escapeHtml(settings.footerText || 'Maths by Aditya | Telegram: @YourChannel')}" placeholder="Footer text..." style="width:160px; font-size:11px;" />
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
             <label class="ppt-fs-color-cell" title="Footer Background Color">
               <span>Bg:</span>
               <input type="color" data-ppt-setting="footerBg" value="${escapeHtml(settings.footerBg || '#7A0000')}" />
@@ -124,15 +157,9 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
               <span>Text:</span>
               <input type="color" data-ppt-setting="footerColor" value="${escapeHtml(settings.footerColor || '#FFFFFF')}" />
             </label>
-            <button class="ppt-fs-ribbon-btn-sm ${isAllScope ? 'is-active' : ''}" data-action="ppt-set-apply-scope" data-scope="${isAllScope ? 'current' : 'all'}" title="Toggle Apply to All Slides vs Current Slide Only" style="font-size:10px; padding:2px 5px;">
-              ${isAllScope ? '🌐 All Slides' : '📄 Current'}
-            </button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-all" title="Apply Current Slide Background, Design & Alignments to ALL Slides" style="font-weight:700; font-size:10px; padding:2px 5px;">
-              ⚡ Apply All
-            </button>
           </div>
         </div>
-        <div class="ppt-fs-ribbon-group-title">5. Footer & Scope</div>
+        <div class="ppt-fs-ribbon-group-title">6. Footer Bar</div>
       </div>
     </div>
   `;

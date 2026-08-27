@@ -1,8 +1,8 @@
-import { branches } from "../branches/index.js?v=v93-drag-drop-perfect";
-import { getSlideSettings } from "../branches/pptBranch.js?v=v93-drag-drop-perfect";
-import { renderMathMl } from "../core/mathml.js?v=v93-drag-drop-perfect";
-import { getEquationDiagnostics } from "../core/normalizer.js?v=v93-drag-drop-perfect";
-import { renderPptBuilderWorkbench, getQuestionImages } from "../branches/ppt/pptUI.js?v=v93-drag-drop-perfect";
+import { branches } from "../branches/index.js";
+import { getSlideSettings } from "../branches/pptBranch.js";
+import { renderMathMl } from "../core/mathml.js";
+import { getEquationDiagnostics } from "../core/normalizer.js";
+import { renderPptBuilderWorkbench, getQuestionImages } from "../branches/ppt/pptUI.js";
 
 export { getQuestionImages };
 

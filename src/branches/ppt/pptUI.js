@@ -1,6 +1,6 @@
 // PPT Slide Builder UI Templates
-import { getSlideSettings, defaultPptSettings, pptThemes } from "../pptBranch.js?v=v93-drag-drop-perfect";
-import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js?v=v93-drag-drop-perfect";
+import { getSlideSettings, defaultPptSettings, pptThemes } from "../pptBranch.js";
+import { renderPptFullscreenOverlay } from "./fullscreen/fullscreenUI.js";
 
 
 export function getQuestionImages(q) {
@@ -635,10 +635,10 @@ SSC CGL (Shift 1)
             <!-- Top Header Bar -->
             <div class="slide-header-bar ppt-resizable-box" style="background:${settings.headerBg || '#7A0000'}; height:${settings.headerHeight || 64}px;">
               <div class="slide-q-badge" contenteditable="true" spellcheck="false" data-ppt-canvas-field="number" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || '#7A0000'}; font-size:${settings.qBadgeSize || 18}px;">
-                ${escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
+                ${activeQ.numberHtml || escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
               </div>
               <div class="slide-exam-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="exam" style="display:${examTagPos === 'header' ? 'block' : 'none'}; color:${settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
-                ${escapeHtml(activeQ.exam || settings.defaultExam || 'SSC CGL (Shift 1)')}
+                ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || 'SSC CGL (Shift 1)')}
               </div>
               <!-- Draggable Topic Title Box in Header -->
               <div class="slide-topic-box canva-transform-box ppt-resizable-box" style="transform:translate(${settings.topicPosX || 0}px, ${settings.topicPosY || 0}px);">
@@ -646,7 +646,7 @@ SSC CGL (Shift 1)
                   <span class="canva-drag-pill" data-ppt-resize-type="topic-position">✥ Topic</span>
                 </div>
                 <div class="slide-topic-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="topic" style="color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px;">
-                  ${escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
+                  ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
                 </div>
                 <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="topic-resize-nw" title="Scale"></div>
                 <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="topic-resize-ne" title="Scale"></div>
@@ -666,7 +666,7 @@ SSC CGL (Shift 1)
                 <div class="canva-drag-bar">
                   <span class="canva-drag-pill" data-ppt-resize-type="eng-position">✥ English</span>
                 </div>
-                <div class="slide-eng-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="english" title="Click to edit English text directly on slide" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 19}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.36};">${escapeHtml(activeQ.english || '')}</div>
+                <div class="slide-eng-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="english" title="Click to edit English text directly on slide" style="color:${settings.engColor || '#111111'}; font-size:${settings.engFontSize || 19}px; font-family:${settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.36};">${activeQ.englishHtml || escapeHtml(activeQ.english || '')}</div>
                 <!-- 4 Corner Circle Handles -->
                 <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="eng-resize-nw" title="Resize Top-Left"></div>
                 <div class="canva-handle canva-corner canva-ne" data-ppt-resize-type="eng-resize-ne" title="Resize Top-Right"></div>
@@ -694,7 +694,7 @@ SSC CGL (Shift 1)
                 <div class="canva-drag-bar">
                   <span class="canva-drag-pill" data-ppt-resize-type="hindi-position">✥ Hindi</span>
                 </div>
-                <div class="slide-hindi-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="hindi" title="Click to edit Hindi text directly on slide" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 18}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.38};">${escapeHtml(activeQ.hindi || '')}</div>
+                <div class="slide-hindi-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="hindi" title="Click to edit Hindi text directly on slide" style="color:${settings.hindiColor || '#7A0000'}; font-size:${settings.hindiFontSize || 18}px; font-family:${settings.hindiFontFamily || 'Mangal, Noto Sans Devanagari, Arial, sans-serif'}; text-align:${settings.textAlign || 'left'}; line-height:${settings.lineHeight || 1.38};">${activeQ.hindiHtml || escapeHtml(activeQ.hindi || '')}</div>
 
                 <!-- 4 Corner Circle Handles -->
                 <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="hindi-resize-nw" title="Resize Top-Left"></div>
@@ -718,7 +718,7 @@ SSC CGL (Shift 1)
                   color:${examTagStyle === 'pill' ? (settings.examTagColor || '#FFFFFF') : (examTagStyle === 'highlight' ? '#854D0E' : (settings.examColor || '#FFFFFF'))};
                   font-size:${settings.examFontSize || 15}px;
                 ">
-                  ${escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
+                  ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(SSC GD 22 Feb., 2024 Shift III)')}
                 </div>
                 <!-- Handles -->
                 <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="exam-resize-nw" title="Scale"></div>
@@ -756,7 +756,7 @@ SSC CGL (Shift 1)
                       ${settings.optionStyle === 'clean' ? `(${(opt.key || String.fromCharCode(65 + oIdx)).toLowerCase()})` : (opt.key || String.fromCharCode(65 + oIdx))}
                     </div>
                     <div class="slide-opt-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="option" data-ppt-canvas-opt-idx="${oIdx}" title="Click to edit Option ${opt.key || String.fromCharCode(65 + oIdx)} on slide" style="color:${settings.optionTextColor || (settings.optionStyle === 'clean' && settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
-                      ${escapeHtml(opt.text || '')}
+                      ${opt.textHtml || escapeHtml(opt.text || '')}
                     </div>
                   </div>
                 `).join("")}
@@ -785,7 +785,7 @@ SSC CGL (Shift 1)
             <!-- Footer Bar (If Enabled) with Height Handle -->
             <div class="slide-footer-bar ppt-resizable-box" contenteditable="true" spellcheck="false" data-ppt-canvas-field="footer" title="Click to edit Footer on slide" style="display:${settings.showFooter !== false ? 'flex' : 'none'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
               <div class="ppt-resize-handle ppt-resize-handle-s" style="top:-5px; bottom:auto;" data-ppt-resize-type="footer-height" title="Drag to adjust Footer Height"></div>
-              ${escapeHtml(settings.footerText || '')}
+              ${settings.footerHtml || escapeHtml(settings.footerText || '')}
             </div>
           </div>
           `}

@@ -40,6 +40,81 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-27 - Options Size & Gap Controls in Design Ribbon Tab
+
+- **Dedicated Options Size & Gap Ribbon Group**:
+  - Placed right next to the **Options Layout** group in the **Design** ribbon tab.
+  - **Gap (px)**: Direct number input stepper to adjust horizontal and vertical card spacing between options (0 to 40px, default 10px).
+  - **Size / Height (px)**: Number input stepper to adjust vertical padding and height of each option card (2 to 30px, default 8px).
+  - **Corner Radius (px)**: Direct number input stepper to adjust corner roundness of option boxes (0 to 30px, default 8px).
+  - **Width (%)**: Live slider to adjust overall options grid width relative to the slide (50% to 100%, default 96%).
+  - Fully synced with universal scope (`Current Slide Only` vs `All Slides`) and instantaneous live canvas rendering.
+
+### 2026-08-27 - Canva-Style In-Place Image Selection & In-Place Crop Engine (Matching Reference Screenshots 1 & 2)
+
+- **Single-Click Selection (Matches User Pic 1)**:
+  - **Ultra-Crisp 8-Node Handles**: 4 corner circular nodes (14px, solid white with bold `#0066ff` border and drop shadow) and 4 edge pill bars (22×8px), guaranteed `z-index: 100` so they never hide or clip.
+  - **Top Rotation Stem & Handle**: Vertical pin extending from top center with a circular `🔄` rotation handle.
+  - **Floating Action Toolbar**: Canva-style rounded white pill below selected image with `✏️ Edit image ✨`, `🪄 Remove BG`, `✂️ Crop`, and `🗑️ Delete`.
+- **Double-Click In-Place Crop Mode (Matches User Pic 2)**:
+  - Double-clicking any slide image activates **In-Place Crop Mode** directly on the slide canvas.
+  - **4 Thick Corner L-Brackets (`┌`, `┐`, `└`, `┘`) & 4 Side Bars**: High-visibility Canva crop handles with 3x3 rule-of-thirds grid.
+  - **Floating Action Bar with `✓ Done`**: Features **`✓ Done` (Tick)** button, **`✕ Cancel`**, and **`↺ Reset`**.
+  - **Finalize on Tick**: Crop executes pixel-perfect sub-rectangle extraction only when clicking **`✓ Done`** (or pressing Enter).
+
+### 2026-08-27 - Double-Click Interactive Crop Mode, Single-Click Image Selection & Full Image Studio
+
+- **Double-Click Interactive Crop Mode**:
+  - Double-clicking any slide image immediately enters full-focus **Crop Mode** with darkened backdrop overlay (`rgba(0, 0, 0, 0.88)`).
+  - Features an 8-point interactive Canva/Photoshop crop frame with rule-of-thirds grid lines, corner brackets, and edge handles.
+  - Floating top action bar with **`✓ Done (Apply)`** (or Enter key), **`✕ Cancel`** (or Esc key), **`↺ Reset`**, and Aspect Ratio presets (`Free`, `16:9`, `4:3`, `1:1`).
+  - High-resolution HTML5 Canvas pixel extraction preserves full sharpness and adjusts slide dimensions proportionally.
+- **Single-Click Selection & Auto-Tab Switching**:
+  - Single-clicking any slide image selects it (active glowing border) and automatically activates the **Insert** ribbon tab with image-specific editing tools.
+- **Remove Background & Clean Math Formula Tools**:
+  - `🪄 Remove White BG`: 1-click automatic background removal turning white screenshot backgrounds transparent.
+  - `✨ Clean Formula BG`: High-contrast transparent math equation/figure isolation.
+- **Image Adjustments (Opacity, Brightness, Contrast)**:
+  - Live real-time sliders for Opacity (0–100%), Brightness (-100% to +100%), and Contrast (-100% to +100%).
+- **Recolor & Color Presets**:
+  - Instant filters: `Grayscale` (B&W print), `Invert` (Dark studio board), `Hi-Contrast`, `Warm Gold`, `Cool Blue`, and `Normal`.
+- **Transform & Arrange**:
+  - `Rotate 90°`, `Flip Horizontal ⇋`, `Flip Vertical ⇅`, and `Delete 🗑️`.
+
+### 2026-08-27 - Universal Scope Checkbox & Exact Duplicate Slide Number Fix
+
+- **Clean Universal Scope Control (Single Top Checkbox)**:
+  - Removed all redundant individual "Apply to All", "Apply All", "All / Curr" scope buttons across **Home**, **Design**, **Editor**, and **View** ribbon tabs.
+  - The universal ribbon top checkbox (`[x] 📌 Current Slide Only` vs `[ ] 🌐 All Slides (Global)`) is now the single source of truth:
+    - **Unchecked (All Slides / Global)**: Any change made (topic name, themes, custom background, colors, fonts, margins, option styles, footer text, exam badges, visibility) immediately applies to ALL slides.
+    - **Checked (Current Slide Only)**: Any change made applies strictly and exclusively to the active current slide.
+- **Exact Duplicate Slide Parity ("Duplicate means Duplicate")**:
+  - Fixed duplicate slide action (`ppt-duplicate-slide`) so it clones the slide 100% identically without mutating or renumbering the question number (e.g. duplicating `Q.1` keeps `Q.1`).
+
+### 2026-08-27 - Universal Undo / Redo for Everything (Header, Footer, Content, Styling & Drag/Resize)
+
+- **Universal Full-Stack Undo / Redo (Ctrl+Z & Ctrl+Y)**:
+  - Fixed keyboard shortcut handler so `Ctrl+Z` (Undo) and `Ctrl+Y` / `Ctrl+Shift+Z` (Redo) are no longer blocked when typing or focused in `contenteditable` or input elements.
+  - Added clean snapshot restoration engine (`applySnapshot`) that completely replaces, adds, and removes properties accurately on undo/redo.
+  - Enabled instant undo & redo for **Header Bar** (Topic title, Exam tag, Q badge, Header height, Topic box positioning/scaling).
+  - Enabled instant undo & redo for **Footer Bar** (Footer text, Footer styling, Footer height).
+  - Enabled instant undo & redo for **Slide Content & Formatting** (English, Hindi, Options, LaTeX formulas, Inline colors, Highlights, Font sizes, Alignments).
+  - Added dedicated **Quick Access Undo / Redo** buttons in Fullscreen top titlebar, Home/Design/Editor ribbon tabs, and bottom status bar.
+
+### 2026-08-27 - 100% WYSIWYG Live Render Export Parity (Rich HTML & Formatting)
+
+- **100% WYSIWYG Live Render to Export Match**:
+  - Synchronized `renderSlideCleanExportHtml` in `slideCanvas.js` to render exact rich HTML formatted markup (`activeQ.topicHtml || settings.topicHtml`, `activeQ.examHtml`, `activeQ.englishHtml`, `activeQ.hindiHtml`, `opt.textHtml`, `settings.footerHtml`, `activeQ.numberHtml`).
+  - Fixed issue where custom header colors, highlight boxes (e.g. blue background topic box), spans, and inline formatting in Image 1 were previously stripped to plain text during export.
+  - Whatever is rendered live on screen in the editor is now exported 1:1 identically to PDF and PPTX.
+
+### 2026-08-27 - Medium Lite PDF Export Diagonal Distortion & Dimension Parity Fix
+
+- **Zero Distortion & Diagonal Skew Fix for Medium Lite & Low Quality**:
+  - Fixed `scale` calculation in `pdfExporter.js` to use exact fractional scales (`2560 / 960 = 2.6666666666666665`, `1280 / 960 = 1.3333333333333333`).
+  - Pass dynamic `canvas.width` and `canvas.height` directly to `buildPdf` XObject image dictionaries instead of hardcoded width/height constants.
+  - Eliminated the 1-pixel scanline mismatch (2559px vs 2560px) that was causing progressive scanline shearing, slanted text, diagonal image distortion, and aspect-ratio squeezing in PDF readers.
+
 ### 2026-08-25 - Full Customization Export Hub & Batch Sets Generator
 
 - **Dedicated 'Export' Ribbon Tab**:

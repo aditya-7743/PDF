@@ -9,6 +9,8 @@ export function renderStatusBar(state) {
     <footer class="ppt-fs-statusbar">
       <div class="ppt-fs-status-left">
         <span class="ppt-fs-status-item">Slide ${activeIdx + 1} of ${Math.max(1, questions.length)}</span>
+        <button class="ppt-fs-status-btn" data-action="ppt-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button class="ppt-fs-status-btn" data-action="ppt-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
         <span class="ppt-fs-status-item">English / Hindi (Maths)</span>
       </div>
 

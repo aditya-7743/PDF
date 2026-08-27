@@ -1,19 +1,20 @@
 // Fullscreen PPT Slide Workbench UI
-import { getSlideSettings } from "../../pptBranch.js?v=v93-drag-drop-perfect";
-import { escapeHtml } from "./ribbon/ribbonCommon.js?v=v93-drag-drop-perfect";
-import { renderRibbonHome } from "./ribbon/ribbonHome.js?v=v93-drag-drop-perfect";
-import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js?v=v93-drag-drop-perfect";
-import { renderRibbonEditor } from "./ribbon/ribbonEditor.js?v=v93-drag-drop-perfect";
-import { renderRibbonInsert } from "./ribbon/ribbonInsert.js?v=v93-drag-drop-perfect";
-import { renderRibbonDesign } from "./ribbon/ribbonDesign.js?v=v93-drag-drop-perfect";
-import { renderRibbonExport } from "./ribbon/ribbonExport.js?v=v93-drag-drop-perfect";
-import { renderRibbonView } from "./ribbon/ribbonView.js?v=v93-drag-drop-perfect";
-import { renderSlideThumbnails } from "./components/slideThumbnails.js?v=v93-drag-drop-perfect";
-import { renderSlideCanvas } from "./components/slideCanvas.js?v=v93-drag-drop-perfect";
-import { renderStatusBar } from "./components/statusBar.js?v=v93-drag-drop-perfect";
-import { renderExportModalHtml } from "./components/exportModal.js?v=v93-drag-drop-perfect";
-import { renderPasteModalHtml } from "./components/pasteModal.js?v=v93-drag-drop-perfect";
-import { renderPptImportWizardModal } from "../pptUI.js?v=v93-drag-drop-perfect";
+import { getSlideSettings } from "../../pptBranch.js";
+import { escapeHtml } from "./ribbon/ribbonCommon.js";
+import { renderRibbonHome } from "./ribbon/ribbonHome.js";
+import { renderRibbonHome2 } from "./ribbon/ribbonHome2.js";
+import { renderRibbonEditor } from "./ribbon/ribbonEditor.js";
+import { renderRibbonInsert } from "./ribbon/ribbonInsert.js";
+import { renderRibbonDesign } from "./ribbon/ribbonDesign.js";
+import { renderRibbonExport } from "./ribbon/ribbonExport.js";
+import { renderRibbonView } from "./ribbon/ribbonView.js";
+import { renderSlideThumbnails } from "./components/slideThumbnails.js";
+import { renderSlideCanvas } from "./components/slideCanvas.js";
+import { renderStatusBar } from "./components/statusBar.js";
+import { renderExportModalHtml } from "./components/exportModal.js";
+import { renderPasteModalHtml } from "./components/pasteModal.js";
+import { renderImageCropModalHtml } from "../components/imageCropModal.js";
+import { renderPptImportWizardModal } from "../pptUI.js";
 
 export function renderPptFullscreenOverlay(state) {
   const ppt = state.ppt || {};
@@ -46,11 +47,19 @@ export function renderPptFullscreenOverlay(state) {
 
   return `
     <div class="ppt-fullscreen-app-overlay" role="dialog" aria-modal="true" aria-label="PowerPoint Slide Editor Fullscreen">
-      <!-- 1. Top Window Title Bar -->
+      <!-- 1. Top Window Title Bar with Quick Access Toolbar -->
       <header class="ppt-fs-titlebar">
-        <div class="ppt-fs-title-left">
+        <div class="ppt-fs-title-left" style="display:flex; align-items:center; gap:8px;">
           <span class="ppt-fs-app-logo">📊</span>
           <span class="ppt-fs-app-name"><b>PowerPoint Slide Editor</b> — ${activeQ.topic || 'Maths Presentation'}</span>
+          <div class="ppt-fs-quick-access" style="display:inline-flex; align-items:center; gap:4px; margin-left:12px;">
+            <button type="button" class="ppt-fs-status-btn" data-action="ppt-undo" title="Undo Last Action (Ctrl+Z)" style="padding:2px 8px; font-size:12px; font-weight:700; background:rgba(255,255,255,0.15); color:#ffffff; border:1px solid rgba(255,255,255,0.3); border-radius:4px; cursor:pointer;">
+              ↶ Undo
+            </button>
+            <button type="button" class="ppt-fs-status-btn" data-action="ppt-redo" title="Redo Next Action (Ctrl+Y)" style="padding:2px 8px; font-size:12px; font-weight:700; background:rgba(255,255,255,0.15); color:#ffffff; border:1px solid rgba(255,255,255,0.3); border-radius:4px; cursor:pointer;">
+              ↷ Redo
+            </button>
+          </div>
         </div>
         <div class="ppt-fs-title-center">
           <span class="ppt-fs-doc-badge">${questions.length} Slides</span>
@@ -92,10 +101,11 @@ export function renderPptFullscreenOverlay(state) {
       <!-- 5. Bottom Status Bar -->
       ${renderStatusBar(state)}
 
-      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub) -->
+      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub, Crop Modal) -->
       ${ppt.showImportWizard ? renderPptImportWizardModal(state) : ""}
       ${ppt.isPasteModalOpen ? renderPasteModalHtml(state) : ""}
       ${ppt.isExportModalOpen ? renderExportModalHtml(state) : ""}
+      ${ppt.activeCrop ? renderImageCropModalHtml(state) : ""}
     </div>
   `;
 }

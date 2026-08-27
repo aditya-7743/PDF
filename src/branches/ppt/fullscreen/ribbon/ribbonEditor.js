@@ -9,6 +9,19 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
 
   return `
     <div class="ppt-fs-ribbon-panel" role="toolbar" aria-label="Editor Ribbon">
+      <!-- History Group -->
+      <div class="ppt-fs-ribbon-group">
+        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
+          <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-undo" title="Undo Last Change (Ctrl+Z)">
+            <span>↶ Undo</span>
+          </button>
+          <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-redo" title="Redo Next Change (Ctrl+Y)">
+            <span>↷ Redo</span>
+          </button>
+        </div>
+        <div class="ppt-fs-ribbon-group-title">History</div>
+      </div>
+
       <!-- Clipboard Group -->
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:2px;">
@@ -30,7 +43,6 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
           <div style="display:flex; gap:3px;">
             <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-duplicate-slide" title="Duplicate Active Slide">📑 Duplicate</button>
             <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-delete-slide" title="Delete Active Slide">🗑️ Delete</button>
-            <button class="ppt-fs-ribbon-btn-sm" data-action="ppt-apply-slide-to-all" title="Apply style to all slides">🚀 Apply All</button>
           </div>
         </div>
         <div class="ppt-fs-ribbon-group-title">Slides</div>
@@ -178,20 +190,6 @@ export function renderRibbonEditor(state, settings, activeQ, activeIdx, totalSli
         <div class="ppt-fs-ribbon-group-title">Symbols & Math Formulas</div>
       </div>
 
-      <!-- Quick Export Group -->
-      <div class="ppt-fs-ribbon-group">
-        <div class="ppt-fs-ribbon-group-content" style="display:flex; align-items:center; gap:4px;">
-          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-export-pptx" style="color:#58a6ff;" title="Export Full PowerPoint Presentation (.pptx)">
-            <span class="ppt-fs-icon">📊</span>
-            <span>Export PPTX</span>
-          </button>
-          <button class="ppt-fs-ribbon-btn-lg" data-action="ppt-export-pdf-high" style="color:#7ee787;" title="Export Ultra HD PDF">
-            <span class="ppt-fs-icon">🖨️</span>
-            <span>Ultra PDF</span>
-          </button>
-        </div>
-        <div class="ppt-fs-ribbon-group-title">Export</div>
-      </div>
     </div>
   `;
 }

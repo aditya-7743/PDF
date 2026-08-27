@@ -1,12 +1,15 @@
 // PPT Slide Builder Controller (Events, Canvas Drag & Resize, Exports)
-import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings } from "../pptBranch.js?v=v93-drag-drop-perfect";
-import { getQuestionImages } from "./pptUI.js?v=v93-drag-drop-perfect";
-import { parseDocxFile, parseQuestionsText } from "../../core/docxParser.js?v=v93-drag-drop-perfect";
-import { exportQuestionsToPdf } from "../../core/pdfExporter.js?v=v93-drag-drop-perfect";
-import { exportQuestionsToPptx } from "../../core/pptxExporter.js?v=v93-drag-drop-perfect";
-import { handleFullscreenAction, bindFullscreenEvents } from "./fullscreen/fullscreenController.js?v=v93-drag-drop-perfect";
-import { renderThumbnailSlideHtml } from "./fullscreen/components/slideThumbnails.js?v=v93-drag-drop-perfect";
-import { parseRangeToIndices, calculateBatchSets, formatFileName, renderExportModalPreviewHtml } from "./fullscreen/components/exportModal.js?v=v96-export-hub-fix";
+import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings } from "../pptBranch.js";
+import { getQuestionImages } from "./pptUI.js";
+import { parseDocxFile, parseQuestionsText } from "../../core/docxParser.js";
+import { exportQuestionsToPdf } from "../../core/pdfExporter.js";
+import { exportQuestionsToPptx } from "../../core/pptxExporter.js";
+import { handleFullscreenAction, bindFullscreenEvents } from "./fullscreen/fullscreenController.js";
+import { renderThumbnailSlideHtml } from "./fullscreen/components/slideThumbnails.js";
+import { parseRangeToIndices, calculateBatchSets, formatFileName, renderExportModalPreviewHtml } from "./fullscreen/components/exportModal.js";
+import { openInPlaceCrop, initInPlaceCrop, finalizeInPlaceCrop } from "./components/inPlaceCropEngine.js";
+import { openImageCropMode, initImageCropModal } from "./components/imageCropModal.js";
+import { removeImageBackground, getActiveSelectedImage } from "./components/imageTools.js";
 
 
 
@@ -70,6 +73,9 @@ export function syncCanvasEditableToState(el, state) {
   } else if (field === "exam") {
     activeQ.examHtml = html;
     activeQ.exam = text;
+  } else if (field === "number") {
+    activeQ.numberHtml = html;
+    activeQ.number = text;
   } else if (field === "option") {
     const oIdx = Number(el.dataset.pptCanvasOptIdx || 0);
     if (!activeQ.options) activeQ.options = [];
@@ -79,6 +85,14 @@ export function syncCanvasEditableToState(el, state) {
   } else if (field === "footer") {
     state.ppt.settings.footerHtml = html;
     state.ppt.settings.footerText = text;
+    if (state.ppt.applyScope === "all") {
+      state.ppt.questions.forEach((q) => {
+        if (q.settings) {
+          q.settings.footerHtml = html;
+          q.settings.footerText = text;
+        }
+      });
+    }
   }
 }
 
@@ -216,6 +230,7 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
   // Track on-slide contenteditable focus
   app.querySelectorAll("[data-ppt-canvas-field]").forEach((el) => {
     el.addEventListener("focus", () => {
+      recordUndo();
       lastFocusedPptCanvasTarget = el;
       lastFocusedPptInput = null;
       const field = el.dataset.pptCanvasField;
@@ -227,6 +242,8 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
         lastActiveFormattingTarget = "topic";
       } else if (field === "exam") {
         lastActiveFormattingTarget = "exam";
+      } else if (field === "footer") {
+        lastActiveFormattingTarget = "footer";
       } else {
         lastActiveFormattingTarget = "english";
       }
@@ -253,13 +270,24 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
 
   // Live input handler for Topic Ribbon Input
   app.querySelectorAll("[data-ppt-ribbon-topic]").forEach((input) => {
+    input.addEventListener("focus", () => {
+      recordUndo();
+    });
     input.addEventListener("input", (e) => {
+      recordUndo();
       const val = e.target.value;
       const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
-      if (activeQ) activeQ.topic = val;
+      if (activeQ) {
+        activeQ.topic = val;
+        activeQ.topicHtml = escapeHtml(val.toUpperCase());
+      }
       state.ppt.settings.topic = val;
+      state.ppt.settings.topicHtml = escapeHtml(val.toUpperCase());
       if (state.ppt.applyScope === "all") {
-        state.ppt.questions.forEach((q) => { q.topic = val; });
+        state.ppt.questions.forEach((q) => {
+          q.topic = val;
+          q.topicHtml = escapeHtml(val.toUpperCase());
+        });
       }
       const canvasTopic = app.querySelector('.slide-topic-title[data-ppt-canvas-field="topic"]');
       if (canvasTopic && document.activeElement !== canvasTopic) {
@@ -398,9 +426,68 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
 
   // Direct On-Canvas Resize Handles (Interactive Live Resizing)
   initCanvasResizeHandles(app, state, recordUndo, saveState, render);
+  initInPlaceCrop(app, state, recordUndo, saveState, render);
+  initImageCropModal(app, state, recordUndo, saveState, render);
   updateToolbarDisplay(app, state);
   bindFullscreenEvents(app, state, render, recordUndo, saveState);
   initSlideImageDragAndDrop(app, state, recordUndo, saveState, render);
+
+  // Slide Image Click (Select & Switch to Insert Tab) and Double Click (In-Place Crop Mode)
+  app.querySelectorAll(".slide-image-container").forEach((box) => {
+    const imgId = box.dataset.imageId;
+    box.addEventListener("click", (e) => {
+      if (e.target.closest(".slide-image-delete-btn") || e.target.closest(".canva-handle") || e.target.closest(".slide-image-floating-toolbar") || e.target.closest(".slide-inplace-crop-overlay")) return;
+      state.ppt.selectedImageId = imgId;
+      if (state.ppt.fsActiveTab !== "insert") {
+        state.ppt.fsActiveTab = "insert";
+        render();
+      } else {
+        app.querySelectorAll(".slide-image-container").forEach((b) => b.classList.remove("is-selected"));
+        box.classList.add("is-selected");
+        saveState(state);
+      }
+    });
+
+    box.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openInPlaceCrop(imgId, app, state, render);
+    });
+  });
+
+  // Image Adjustment Sliders (Opacity, Brightness, Contrast)
+  app.querySelectorAll("[data-ppt-img-adj]").forEach((slider) => {
+    const adjType = slider.dataset.pptImgAdj;
+    const label = app.querySelector(`[data-ppt-img-val="${adjType}"]`);
+
+    slider.addEventListener("input", () => {
+      const val = Number(slider.value);
+      if (label) label.textContent = `${val}%`;
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        selectedImg[adjType] = val;
+        const imgEl = app.querySelector(`.slide-image-container[data-image-id="${selectedImg.id}"] img`) || app.querySelector(".slide-image-container.is-selected img");
+        if (imgEl) {
+          const op = selectedImg.opacity !== undefined ? selectedImg.opacity : 100;
+          const br = selectedImg.brightness !== undefined ? selectedImg.brightness : 0;
+          const co = selectedImg.contrast !== undefined ? selectedImg.contrast : 0;
+          let filterCss = `opacity(${op}%) brightness(${100 + br}%) contrast(${100 + co}%)`;
+          if (selectedImg.filter === "grayscale") filterCss += " grayscale(100%)";
+          else if (selectedImg.filter === "invert") filterCss += " invert(100%)";
+          else if (selectedImg.filter === "high-contrast") filterCss += " contrast(180%) brightness(110%)";
+          else if (selectedImg.filter === "gold") filterCss += " sepia(80%) saturate(200%) hue-rotate(5deg)";
+          else if (selectedImg.filter === "blue") filterCss += " sepia(50%) saturate(200%) hue-rotate(180deg)";
+          imgEl.style.filter = filterCss;
+        }
+      }
+    });
+
+    slider.addEventListener("change", () => {
+      recordUndo();
+      saveState(state);
+      render();
+    });
+  });
 
   const activeEmbeddedThumb = app.querySelector(".ppt-slide-card.is-active") || app.querySelector(".ppt-sidebar-item.is-active");
   if (activeEmbeddedThumb) {
@@ -632,14 +719,20 @@ export function handlePptToolbarAction(action, app, state, recordUndo, saveState
   }
 }
 
-export function handlePptAction(action, target, app, state, render, recordUndo, saveState) {
+export function handlePptAction(action, target, app, state, render, recordUndo, saveState, undoState, redoState) {
   ensurePptState(state);
   const ppt = state.ppt;
   const isCurrentScope = isTargetCurrentScope(ppt);
   const activeQ = ppt.questions[ppt.activeQuestionIndex];
 
-
-
+  if (action === "ppt-undo" || action === "undo") {
+    if (typeof undoState === "function") undoState();
+    return;
+  }
+  if (action === "ppt-redo" || action === "redo") {
+    if (typeof redoState === "function") redoState();
+    return;
+  }
 
   if (action.startsWith("ppt-fs-") || action === "ppt-open-fullscreen" || action === "ppt-close-fullscreen") {
     handleFullscreenAction(action, target, app, state, render, recordUndo, saveState);
@@ -1222,10 +1315,11 @@ Ans: C (SSC GD 2024 Shift 2)`;
       if (currentQ) {
         recordUndo();
         const copy = JSON.parse(JSON.stringify(currentQ));
-        copy.id = `q_${Date.now()}`;
-        copy.number = `Q.${ppt.questions.length + 1}`;
+        copy.id = `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        // Duplicate means exact 1:1 duplicate - keep exact original question number, formatting, and content
         ppt.questions.splice(ppt.activeQuestionIndex + 1, 0, copy);
         ppt.activeQuestionIndex += 1;
+        saveState(state);
         render();
       }
       break;
@@ -1390,7 +1484,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
 
 
     case "ppt-remove-image": {
-      const imgId = target?.dataset?.imageId;
+      const imgId = target?.dataset?.imageId || state.ppt.selectedImageId;
       if (activeQ) {
         recordUndo();
         if (Array.isArray(activeQ.images)) {
@@ -1401,6 +1495,123 @@ Ans: C (SSC GD 2024 Shift 2)`;
           }
         }
         delete activeQ.image;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-trigger-crop-mode": {
+      const imgId = target?.dataset?.imageId || state.ppt.selectedImageId;
+      openInPlaceCrop(imgId, app, state, render);
+      break;
+    }
+    case "ppt-crop-apply": {
+      finalizeInPlaceCrop(app, state, recordUndo, saveState, render);
+      break;
+    }
+    case "ppt-crop-cancel": {
+      state.ppt.activeCrop = null;
+      render();
+      break;
+    }
+    case "ppt-crop-reset": {
+      if (state.ppt.activeCrop) {
+        state.ppt.activeCrop.cropLeft = 0;
+        state.ppt.activeCrop.cropTop = 0;
+        state.ppt.activeCrop.cropRight = 0;
+        state.ppt.activeCrop.cropBottom = 0;
+        render();
+      }
+      break;
+    }
+    case "ppt-remove-image-bg": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && (selectedImg.dataUrl || typeof selectedImg === "string")) {
+        recordUndo();
+        const dataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
+        removeImageBackground(dataUrl, 35).then((transparentUrl) => {
+          if (typeof selectedImg === "object") {
+            selectedImg.dataUrl = transparentUrl;
+          } else {
+            activeQ.image = transparentUrl;
+          }
+          saveState(state);
+          render();
+        });
+      }
+      break;
+    }
+    case "ppt-make-transparent-math": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && (selectedImg.dataUrl || typeof selectedImg === "string")) {
+        recordUndo();
+        const dataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
+        removeImageBackground(dataUrl, 50).then((transparentUrl) => {
+          if (typeof selectedImg === "object") {
+            selectedImg.dataUrl = transparentUrl;
+            selectedImg.contrast = 35;
+          } else {
+            activeQ.image = transparentUrl;
+          }
+          saveState(state);
+          render();
+        });
+      }
+      break;
+    }
+    case "ppt-reset-image-adjustments": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        recordUndo();
+        selectedImg.opacity = 100;
+        selectedImg.brightness = 0;
+        selectedImg.contrast = 0;
+        selectedImg.filter = "none";
+        selectedImg.rotation = 0;
+        selectedImg.flipH = false;
+        selectedImg.flipV = false;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-set-image-filter": {
+      const filter = target?.dataset?.filter || "none";
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        recordUndo();
+        selectedImg.filter = filter;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-rotate-image": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        recordUndo();
+        selectedImg.rotation = ((selectedImg.rotation || 0) + 90) % 360;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-flip-image-h": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        recordUndo();
+        selectedImg.flipH = !selectedImg.flipH;
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-flip-image-v": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object") {
+        recordUndo();
+        selectedImg.flipV = !selectedImg.flipV;
+        saveState(state);
         render();
       }
       break;
@@ -1562,7 +1773,7 @@ function handlePptSettingInput(e, app, state, recordUndo, saveState) {
   recordUndo();
   const key = e.target.dataset.pptSetting;
   let val = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-  if (e.target.type === "range") val = Number(val);
+  if (e.target.type === "range" || e.target.type === "number") val = Number(val);
 
   if (e.target.type === "color" && (key === "engColor" || key === "hindiColor" || key === "topicColor" || key === "optionTextColor" || key === "examTagColor" || key === "footerColor")) {
     const appliedInline = applyInlineFormatting("foreColor", val, app, state, saveState);
@@ -1571,26 +1782,43 @@ function handlePptSettingInput(e, app, state, recordUndo, saveState) {
     }
   }
 
-  const isCurrentScope = isTargetCurrentScope(state.ppt);
-
-  const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+  const ppt = state.ppt;
+  const activeQ = ppt.questions?.[ppt.activeQuestionIndex];
+  const isCurrentScope = isTargetCurrentScope(ppt);
 
   if (isCurrentScope && activeQ) {
     if (!activeQ.settings) activeQ.settings = {};
     activeQ.settings[key] = val;
+    if (key === "topic") {
+      activeQ.topic = val;
+      activeQ.topicHtml = escapeHtml(val.toUpperCase());
+    }
+    if (key === "footerText") {
+      activeQ.settings.footerHtml = escapeHtml(val);
+    }
   } else {
     state.ppt.settings[key] = val;
-    if (activeQ && activeQ.settings && key in activeQ.settings) {
-      delete activeQ.settings[key];
-      if (Object.keys(activeQ.settings).length === 0) delete activeQ.settings;
+    if (key === "topic") {
+      state.ppt.settings.topicHtml = escapeHtml(val.toUpperCase());
+      state.ppt.questions.forEach((q) => {
+        q.topic = val;
+        q.topicHtml = escapeHtml(val.toUpperCase());
+      });
     }
-  }
-  
-  if (key === "topic" && activeQ) {
-    activeQ.topic = val;
+    if (key === "footerText") {
+      state.ppt.settings.footerHtml = escapeHtml(val);
+    }
+    state.ppt.questions.forEach((q) => {
+      if (q.settings && key in q.settings) {
+        delete q.settings[key];
+        if (key === "footerText") delete q.settings.footerHtml;
+        if (Object.keys(q.settings).length === 0) delete q.settings;
+      }
+    });
   }
 
   updateLiveCanvasSlide(app, state, saveState);
+  saveState(state);
 }
 
 export function initCanvasResizeHandles(app, state, recordUndo, saveState, render) {
@@ -1845,6 +2073,28 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
             recordUndo();
             syncCustomizerSliders(app, state);
             updateLiveCanvasSlide(app, state, saveState);
+          } else if (isImage) {
+            const imgId = box.dataset.imageId;
+            const now = Date.now();
+            const lastClick = box._lastClickTime || 0;
+            if (now - lastClick < 350) {
+              // Double click detected -> Open In-Place Crop Mode!
+              box._lastClickTime = 0;
+              openInPlaceCrop(imgId, app, state, render);
+            } else {
+              // Single click detected -> Select image & Switch to Insert tab!
+              box._lastClickTime = now;
+              state.ppt.selectedImageId = imgId;
+              if (state.ppt.fsActiveTab !== "insert") {
+                state.ppt.fsActiveTab = "insert";
+                render();
+              } else {
+                canvasWrapper.querySelectorAll(".slide-image-container").forEach((b) => b.classList.remove("is-selected"));
+                box.classList.add("is-selected");
+                saveState(state);
+                render();
+              }
+            }
           }
         }
 

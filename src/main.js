@@ -1,13 +1,13 @@
-import { branches } from "./branches/index.js?v=v93-drag-drop-perfect";
-import { renderApp, getQuestionImages } from "./ui/layout.js?v=v93-drag-drop-perfect";
-import { getEquationDiagnostics } from "./core/normalizer.js?v=v93-drag-drop-perfect";
+import { branches } from "./branches/index.js";
+import { renderApp, getQuestionImages } from "./ui/layout.js";
+import { getEquationDiagnostics } from "./core/normalizer.js";
 import {
   bindPptEvents,
   handlePptAction,
   handlePptSlideNavKeydown,
   handlePptCanvasPaste,
   ensurePptState
-} from "./branches/ppt/pptController.js?v=v93-drag-drop-perfect";
+} from "./branches/ppt/pptController.js";
 import {
   bindImagePdfEvents,
   handleImagePdfPaste,
@@ -189,13 +189,24 @@ function recordUndo() {
   redoStack.length = 0;
 }
 
+function applySnapshot(snapshotJson) {
+  if (!snapshotJson) return;
+  const parsed = JSON.parse(snapshotJson);
+  for (const key of Object.keys(state)) {
+    if (!(key in parsed)) {
+      delete state[key];
+    }
+  }
+  Object.assign(state, parsed);
+}
+
 function undoState() {
   if (!undoStack.length) return;
   redoStack.push(JSON.stringify(state));
   const prev = undoStack.pop();
   isApplyingHistory = true;
   try {
-    Object.assign(state, JSON.parse(prev));
+    applySnapshot(prev);
     saveState(state);
     render();
   } finally {
@@ -209,7 +220,7 @@ function redoState() {
   const next = redoStack.pop();
   isApplyingHistory = true;
   try {
-    Object.assign(state, JSON.parse(next));
+    applySnapshot(next);
     saveState(state);
     render();
   } finally {
@@ -221,19 +232,18 @@ function handleGlobalUndoRedoKeydown(event) {
   const isCtrlOrCmd = event.ctrlKey || event.metaKey;
   if (!isCtrlOrCmd) return;
 
-  if (event.key === "z" && !event.shiftKey) {
-    const target = event.target;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
-      return;
-    }
+  const key = event.key ? event.key.toLowerCase() : "";
+  if (key === "z" && !event.shiftKey) {
     event.preventDefault();
+    if (document.activeElement && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
     undoState();
-  } else if ((event.key === "y" && !event.shiftKey) || (event.key === "z" && event.shiftKey) || (event.key === "Z" && event.shiftKey)) {
-    const target = event.target;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
-      return;
-    }
+  } else if ((key === "y" && !event.shiftKey) || (key === "z" && event.shiftKey)) {
     event.preventDefault();
+    if (document.activeElement && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
     redoState();
   }
 }
@@ -332,44 +342,18 @@ function handleAction(event) {
   if (!node) return;
   const action = node.dataset.action;
 
-  if (action && action.startsWith("ppt-")) {
-    handlePptAction(action, node, app, state, render, recordUndo, saveState);
-    return;
-  }
-
-  if (action === "switch-mode") {
-    recordUndo();
-    state.mode = normalizeAppMode(node.dataset.mode);
-    if (state.mode === "math-figures") {
-      state.input = "";
-      state.activeFigureTool = state.activeFigureTool || "blank-canvas";
-      state.visualOverride = renderDrawingSurface();
-    } else {
-      state.visualOverride = "";
-      state.activeFigureTool = "";
-      state.activeDrawTool = "";
-      state.selectedDrawingId = "";
-      state.cropMode = false;
-    }
-    saveState(state);
-    render();
-    return;
-  }
-
-  if (action === "select-image-tool") {
-    state.imageToolMode = normalizeImageToolMode(node.dataset.imageTool);
-    saveState(state);
-    render();
-    return;
-  }
-
-  if (action === "undo" || action === "undo-state") {
+  if (action === "undo" || action === "undo-state" || action === "ppt-undo") {
     undoState();
     return;
   }
 
-  if (action === "redo" || action === "redo-state") {
+  if (action === "redo" || action === "redo-state" || action === "ppt-redo") {
     redoState();
+    return;
+  }
+
+  if (action && action.startsWith("ppt-")) {
+    handlePptAction(action, node, app, state, render, recordUndo, saveState, undoState, redoState);
     return;
   }
 

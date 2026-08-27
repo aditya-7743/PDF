@@ -1,5 +1,5 @@
 // Fullscreen Paste Text Modal (Direct Questions Import)
-import { escapeHtml } from "../ribbon/ribbonCommon.js?v=v84-topic-paste-fix";
+import { escapeHtml } from "../ribbon/ribbonCommon.js";
 
 export function renderPasteModalHtml(state) {
   const ppt = state.ppt || {};

@@ -21,14 +21,7 @@ export function renderRibbonView(state, settings, applyScope, activeIdx) {
         <div class="ppt-fs-ribbon-group-title">Screen Layout</div>
       </div>
 
-      <!-- Scope Group -->
-      <div class="ppt-fs-ribbon-group">
-        <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
-          <button class="ppt-fs-ribbon-btn-sm ${applyScope === 'all' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="all">🌐 Master (All Slides)</button>
-          <button class="ppt-fs-ribbon-btn-sm ${applyScope === 'current' ? 'is-active' : ''}" data-action="ppt-set-scope" data-scope="current">🎯 Slide ${activeIdx + 1} Only</button>
-        </div>
-        <div class="ppt-fs-ribbon-group-title">Apply Scope</div>
-      </div>
+
 
       <!-- Reset Group -->
       <div class="ppt-fs-ribbon-group">
