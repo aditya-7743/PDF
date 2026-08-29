@@ -40,6 +40,15 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-08-29 - Fixed Top Mode Navigation Buttons ("Equation Editor", "Math Figures", "Image Tools", "PPT Builder")
+
+- **Top Navigation Mode Switching Fix**:
+  - Fixed click handlers in `src/main.js` and `src/ui/layout.js` so clicking **Equation Editor**, **Math Figures**, **Image Tools**, and **PPT Builder** immediately switches active workspace modes.
+  - Added support for both `data-action="switch-mode"` and `data-mode` / `data-set-mode` selectors.
+  - Added sub-mode switching handler for **Image Tools** (`Image to PDF` vs `Image resize`).
+  - Exposed `window.state`, `window.app`, and state helper functions globally so child branch controllers execute with zero runtime ReferenceErrors.
+  - Bumped cache buster query parameter in `index.html` to `v206-fix-mode-buttons` ensuring GitHub Pages serves fresh un-cached scripts.
+
 ### 2026-08-27 - Options Size & Gap Controls in Design Ribbon Tab
 
 - **Dedicated Options Size & Gap Ribbon Group**:

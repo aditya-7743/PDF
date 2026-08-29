@@ -69,6 +69,17 @@ let isApplyingHistory = false;
 
 const app = document.querySelector("#app");
 
+// Expose on window for modular branch controllers
+window.state = state;
+window.app = app;
+window.recordUndo = recordUndo;
+window.saveState = saveState;
+window.render = render;
+window.undoState = undoState;
+window.redoState = redoState;
+window.normalizeAppMode = normalizeAppMode;
+window.normalizeImageToolMode = normalizeImageToolMode;
+
 export { getQuestionImages };
 
 document.addEventListener("paste", handleGlobalPaste);
@@ -297,9 +308,10 @@ function render() {
 
 function bindEvents() {
   // Topbar Mode Switching
-  app.querySelectorAll("[data-set-mode]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetMode = normalizeAppMode(btn.dataset.setMode);
+  app.querySelectorAll("[data-set-mode], [data-mode][data-action='switch-mode'], .mode-button[data-mode]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const targetMode = normalizeAppMode(btn.dataset.mode || btn.dataset.setMode);
       if (state.mode !== targetMode) {
         recordUndo();
         state.mode = targetMode;
@@ -342,6 +354,28 @@ function handleAction(event) {
   const node = event.target.closest("[data-action]");
   if (!node) return;
   const action = node.dataset.action;
+
+  if (action === "switch-mode" || action === "set-mode") {
+    const targetMode = normalizeAppMode(node.dataset.mode || node.dataset.setMode);
+    if (state.mode !== targetMode) {
+      recordUndo();
+      state.mode = targetMode;
+      saveState(state);
+      render();
+    }
+    return;
+  }
+
+  if (action === "select-image-tool") {
+    const targetTool = normalizeImageToolMode(node.dataset.imageTool);
+    if (state.imageToolMode !== targetTool) {
+      recordUndo();
+      state.imageToolMode = targetTool;
+      saveState(state);
+      render();
+    }
+    return;
+  }
 
   if (action === "undo" || action === "undo-state" || action === "ppt-undo") {
     undoState();

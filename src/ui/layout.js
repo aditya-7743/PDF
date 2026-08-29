@@ -22,10 +22,10 @@ function renderTopbar(state) {
   return `
     <header class="topbar">
       <div class="mode-switch" role="tablist" aria-label="Workspace mode">
-        <button class="mode-button${mode === "equation" ? " is-active" : ""}" data-action="switch-mode" data-mode="equation" type="button">Equation Editor</button>
-        <button class="mode-button${mode === "math-figures" ? " is-active" : ""}" data-action="switch-mode" data-mode="math-figures" type="button">Math Figures</button>
-        <button class="mode-button${mode === "image-tools" ? " is-active" : ""}" data-action="switch-mode" data-mode="image-tools" type="button">Image Tools</button>
-        <button class="mode-button${mode === "ppt-builder" ? " is-active" : ""}" data-action="switch-mode" data-mode="ppt-builder" type="button">PPT Builder</button>
+        <button class="mode-button${mode === "equation" ? " is-active" : ""}" data-action="switch-mode" data-mode="equation" data-set-mode="equation" type="button">Equation Editor</button>
+        <button class="mode-button${mode === "math-figures" ? " is-active" : ""}" data-action="switch-mode" data-mode="math-figures" data-set-mode="math-figures" type="button">Math Figures</button>
+        <button class="mode-button${mode === "image-tools" ? " is-active" : ""}" data-action="switch-mode" data-mode="image-tools" data-set-mode="image-tools" type="button">Image Tools</button>
+        <button class="mode-button${mode === "ppt-builder" ? " is-active" : ""}" data-action="switch-mode" data-mode="ppt-builder" data-set-mode="ppt-builder" type="button">PPT Builder</button>
       </div>
     </header>
   `;
@@ -42,7 +42,11 @@ function renderWorkbench(state, rendered, diagnostics) {
 
   if (isDrawingMode(mode)) {
     return `
-      <main class="workbench is-figures-mode is-empty-figures-mode" aria-label="Math Figures"></main>
+      <main class="workbench is-figures-mode" aria-label="Math Figures" style="${renderColumnStyle(state.columns)}">
+        ${renderToolsPanel(state)}
+        <div class="column-resizer" data-column-resizer="tools-preview" role="separator" aria-orientation="vertical" aria-label="Resize tools and preview panels" tabindex="0"></div>
+        ${renderPreviewPanel(state, rendered, diagnostics)}
+      </main>
     `;
   }
 
