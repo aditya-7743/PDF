@@ -40,6 +40,105 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-09-03 - Fixed Drag Disappear & Layout Jumping Bug
+
+- **Fixed Q.No and Canvas Element Disappearing on Drag/Move**:
+  - Fixed discrepancy in `updateLiveCanvasSlide` where `boxPosX` evaluated to `0%` instead of `42%` in `Side-Split` layout preset during mouse drag, which caused the entire question content container to violently shift 403px to the left, throwing the Q.No badge off-screen.
+  - Aligned `updateLiveCanvasSlide` body position calculation with `slideCanvas.js` (`posXPercent = (boxPosX && Number(boxPosX) !== 0) ? Number(boxPosX) : (layoutPreset === "right-split" ? 42 : 0)`).
+  - Sanitized position coordinates across `onBoxMouseMove` and `onMouseMove` using `Number.parseFloat` to eliminate `NaN` transform values.
+  - Ensured `standaloneQBox.style.display` is cleanly controlled by `(!showHeader && showQBadge)` so it never gets hidden when actively toggled.
+  - Bumped cache version in `index.html` to `v228-fix-drag-disappear-jump`.
+
+### 2026-09-03 - Robust DOCX & Question/Option Parser
+
+- **Fixed DOCX Line-Break Truncation & Option Parsing**:
+  - Word (.docx) files are now extracted via Mammoth's HTML converter (`convertToHtml`) rather than `extractRawText`, preserving paragraph breaks (`<p>`), line breaks (`<br>`), tables, and list structures.
+  - Added pre-processing normalization to automatically separate questions and bracketed options (`[A]`, `(A)`, etc.) even if Word XML stripped intermediate spaces or newlines.
+  - Updated option regex to match all bracket styles (`[A]`, `(A)`, `【A】`, `［A］`) even if directly adjacent to previous text, ensuring Option C and Option D are never dropped.
+  - Truncated option values at `Answer : [A-E]` to prevent trailing question text from leaking into Option D.
+  - Removed unwanted default fallback "SSC CGL (Shift 1)" exam tag when the document does not contain an exam line.
+  - Bumped cache version in `index.html` to `v227-fix-docx-and-paste-parser`.
+
+### 2026-09-03 - Fixed Clear All Data Direct Execution
+
+- **Direct & Reliable Clear All Data**:
+  - Fixed issue where clicking "Clear All Data" in Home tab did not clear slides due to broken modal z-index layering and state interception.
+  - Clicking "Clear All Data" now directly triggers standard browser confirmation (`window.confirm`) and immediately resets all slides to a single clean slide (`Q.1`), clears localStorage, and updates the canvas without altering the user's configured theme or fonts.
+  - Bumped cache version in `index.html` to `v226-fix-clear-all-data-direct`.
+
+### 2026-09-03 - Direct DOCX & Paste Import (Preserve User Layout & Alignment)
+
+- **Bypassed Import Wizard Modal**:
+  - Removed the intrusive "Choose Live Teaching Layout (Setup before Create)" modal during `.docx` upload, drag-and-drop, and Paste Text.
+  - When importing questions from `.docx` files or pasted text, the system now immediately parses and loads questions directly onto slides using the user's currently configured layout, alignment, positioning (`boxPosX`, `boxPosY`, `questionBoxWidth`, `layoutPreset`), theme, custom background image, and font sizes.
+  - Automatically activates content elements (`showEnglish`, `showHindi`, `showDivider`, `showExamTag`, `showOptions`) based on each question's actual parsed content while respecting global settings.
+  - Bumped cache version in `index.html` to `v225-direct-docx-import-keep-layout`.
+
+### 2026-09-03 - Shifted Footer Settings Group to Design Tab
+
+- **Ribbon Group Reorganization**:
+  - Moved the Footer settings group (`footerText`, `footerHeight`, and `footerFontSize`) from the `Home` ribbon tab (`src/branches/ppt/fullscreen/ribbon/ribbonHome.js`) into the `Design` ribbon tab (`src/branches/ppt/fullscreen/ribbon/ribbonDesign.js`) as Group 4 (`4. Footer`).
+  - Renumbered `Docx & Paste` in `Home` tab to Group 6 (`6. Docx & Paste`).
+  - Bumped cache version in `index.html` to `v224-shift-footer-to-design`.
+
+### 2026-09-03 - Fixed Live Preview Out of Boundary with Dynamic Auto-Fit Stage Scaler
+
+- **Live Preview Boundary & Responsive Auto-Fit**:
+  - Fixed severe layout overflow issue where the 960x540 slide canvas went out of screen boundary on compact laptop windows or split screens.
+  - Closed missing HTML tags in `src/branches/ppt/fullscreen/components/slideCanvas.js` (`.ppt-fs-stage-scaler` and `<main class="ppt-fs-stage-viewport">` were unclosed, which broke the flexbox tree and pushed the bottom status bar out of viewport).
+  - Introduced `.ppt-fs-stage-scaler-box` container with dynamic pixel layout bounding box matching the visual scaled dimensions, perfectly centering the slide in `.ppt-fs-stage-viewport`.
+  - Implemented real `calculateAutoFitZoom` in `fullscreenController.js` that measures available stage viewport dimensions (`clientWidth` and `clientHeight`) and calculates the exact fit percentage (25%–100%) so the 16:9 slide always fits completely on screen without cutting off elements or scrollbars.
+  - Connected responsive `window.resize` listener and updated "Fit" button (`ppt-fs-zoom-reset` & `Ctrl + 0`) to dynamically auto-fit.
+  - Updated zoom interaction scale calculations across `pptController.js` so drag-and-drop, bounding box move, and resize handles map 1:1 at any scale.
+  - Bumped cache version in `index.html` to `v223-fix-slide-canvas-autofit-boundary`.
+
+### 2026-09-03 - Removed Redundant Theme & BG Group from Design Tab
+
+- **De-duplicated Ribbon Tabs**:
+  - Removed redundant `1. Background & Themes` group from the `Design` ribbon tab (`src/branches/ppt/fullscreen/ribbon/ribbonDesign.js`) as Theme and Background options are already hosted in the `Home` ribbon tab.
+  - Renumbered groups in `Design` tab cleanly: `1. Colours for Every Element`, `2. Exam Badge`, and `3. Typography`.
+  - Added all 7 predefined themes (`Dark`, `Maroon`, `Navy`, `Emerald`, `Purple`, `Slate`, `White`) to `Home` tab (`src/branches/ppt/fullscreen/ribbon/ribbonHome.js`) so users have one unified place for themes and wallpaper background controls.
+  - Bumped cache version in `index.html` to `v222-remove-redundant-design-themes`.
+
+### 2026-09-02 - Professional Custom Background Upload & Canvas Overlay Fix
+
+- **Custom Background Rendering & Clean Canvas Fix**:
+  - Fixed issue where uploading a custom background on a blank or question slide was covered by an opaque white "Fresh Blank Slide" box with dashed borders.
+  - Corrected `slideCanvas.js` placeholder visibility check to verify `!bgImgUrl` (which includes `activeQ.bgImage`, `activeQ.settings.bgImage`, and `settings.bgImage`). When any background image is present, placeholder overlays are completely removed.
+  - Replaced legacy forced `#000000 url(...)` with clean CSS `background-image: url(...)` combined with slide background color and responsive scaling (`100% 100%`, `cover`, or `contain`).
+  - Updated `getSlideSettings` in `src/branches/pptBranch.js` to automatically incorporate `q.bgImage` into slide settings across all renderers, thumbnail generators, and PDF/PPTX exporters.
+  - Updated `slideThumbnails.js` to mirror custom background images identically and suppress the "Blank Slide" text label whenever a custom background is applied.
+  - Bumped cache buster in `index.html` to `v211-fix-custom-bg-render`.
+
+### 2026-09-02 - Pure Fullscreen-Only PPT Builder & Legacy Workbench Cleanup
+
+- **Fullscreen-Only PPT Builder Studio**:
+  - Removed all obsolete legacy embedded workbench UI in PPT Builder (the cluttered left sidebar "PPT Customizer & Import", duplicate top toolbar, duplicate canvas container, and extra export footer).
+  - PPT Builder now directly launches and runs the complete, professional PowerPoint Full Screen Ribbon interface (`renderPptFullscreenOverlay`).
+  - Preserved 100% of all full-screen features:
+    - Ribbon Tabs: **Home**, **Design**, **Editor**, **Insert**, **Export**, **View**.
+    - Scope toggle (`Current Slide Only` vs `All Slides`).
+    - Thumbnails sidebar with reorder, duplicate, delete.
+    - Interactive 16:9 Slide Canvas with in-place image selection and crop engine.
+    - Undo / Redo toolbar and keyboard shortcuts.
+    - Batch sets generator and multi-quality PDF/PPTX export modals.
+  - Added dedicated **🏠 Home** button in the PowerPoint title bar and status bar for instantaneous return to the Home page.
+  - Bumped cache buster in `index.html` to `v210-fullscreen-only-ppt`.
+
+### 2026-09-02 - Dedicated Home Page with 4 Large Interactive Tool Blocks
+
+- **Dedicated Home Page Dashboard**:
+  - Added new **Home Page** (`homeUI.js` and `homeBranch.js`) providing a centralized dashboard.
+  - 4 large interactive blocks (cards) with distinct color themes, hero icons, feature bullet points, and hover lift effects:
+    1. **Equation Editor**: LaTeX / AI Math normalizer, live MathML preview, high-res PNG export.
+    2. **Math Figures**: Geometry diagrams, vector shapes, snapping grid, SVG/PNG export.
+    3. **Image Tools**: Multi-image to PDF converter, custom margins, high-precision image resizer.
+    4. **PPT Builder**: Bilingual (Hindi + English) question slides, MCQ cards, exam badges, in-place crop, PDF & PPTX export.
+  - Clicking anywhere on a card or its action button immediately opens that workspace.
+  - Added **🏠 Home** button to the top navigation bar for seamless return from any workspace.
+  - Added clickable brand title on the top left navigating back to the Home page.
+  - Bumped cache buster in `index.html` to `v207-home-page-blocks`.
+
 ### 2026-08-29 - Fixed Top Mode Navigation Buttons ("Equation Editor", "Math Figures", "Image Tools", "PPT Builder")
 
 - **Top Navigation Mode Switching Fix**:
@@ -549,8 +648,13 @@ http://127.0.0.1:8765/
 - Made the drawing SVG fill the entire original-form canvas so figures can be drawn anywhere inside it.
 - Removed drawing-mode canvas padding so pointer coordinates map to the full visible canvas area.
 
-### 2026-06-28 - Fixed Drawn Shape Edge Clipping
+### 2026-09-03 - Serial Order Element Stacking & "(Exam Name)" Placeholder
 
-- Stopped applying SVG clip paths to normally drawn shapes.
-- Kept clipping only for shapes that the user has intentionally cropped.
-- Prevented curved and stroked figure edges from being cut off at their bounding box.
+- Fixed element placement so elements appear in a clean, professional vertical serial order (`Q.No` → `English` → `Divider` → `Hindi` → `Exam Tag` → `Options`) regardless of the order in which they are added, avoiding any scattered ("jaha taha") layout.
+- Cleaned default layout preset to full-width left-aligned standard stack (`boxPosX: 0`, `questionBoxWidth: 100%`).
+- Removed all hardcoded old exam strings (`SSC GD 22 Feb., 2024 Shift III`, `SSC CGL 12/09/2025 (Shift 1)`, etc.) and replaced with editable `(Exam Name)`.
+- Removed confusing `Blank` layout button from Ribbon Group 4 ("Question & Options Layout"), keeping only the 3 question layouts (`Side-Split`, `2x2 Grid`, `1-Column`).
+- Fixed `☰ 1-Column` layout preset button: now directly sets `optionsLayout: "1-col"` (and `⊞ 2x2 Grid` sets `optionsLayout: "2-col"`) so options instantly switch between 1-column vertical stack and 2x2 grid, with accurate active button highlighting.
+- Added `⋯ 4-In-Line` layout button in Ribbon Group 4: puts all four options in a single horizontal row (`repeat(4, 1fr)`) with compact spacing and padding.
+- Extracted font size inputs into a dedicated ribbon group (`4. Font Sizes`) positioned cleanly between `3. + Add Elements` and `5. Question & Options Layout`, with clear labels for `Eng`, `हिंदी`, `Opt`, and `Exam`.
+- Bumped cache buster to `v221-dedicated-font-sizes-group`.

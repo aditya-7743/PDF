@@ -56,8 +56,8 @@ export function calculateBatchSets(totalSlides, chunkSize = 25, mandatoryPrefixS
     const chunk = questionIndices.slice(i, i + size);
     const setIndices = [...prefixIndices, ...chunk, ...suffixIndices];
     const setNum = sets.length + 1;
-    const startQNum = chunk.length > 0 ? (chunk[0] + 1) : (i + 1);
-    const endQNum = chunk.length > 0 ? (chunk[chunk.length - 1] + 1) : Math.min(questionIndices.length, i + size);
+    const startQNum = i + 1;
+    const endQNum = i + chunk.length;
 
     sets.push({
       setNumber: setNum,
@@ -93,13 +93,19 @@ export function calculateBatchSets(totalSlides, chunkSize = 25, mandatoryPrefixS
  */
 export function formatFileName(pattern, vars) {
   let name = pattern || "{topic}_Set_{set}";
+  const cleanTopic = (vars.topic || "Question_Slides")
+    .replace(/[\|\\\/:*?"<>]/g, " ")
+    .replace(/\s+/g, "_");
+
   name = name
-    .replace(/\{topic\}/gi, vars.topic || "Question_Slides")
-    .replace(/\{set\}/gi, vars.set !== undefined ? String(vars.set) : "1")
-    .replace(/\{start\}/gi, vars.start !== undefined ? String(vars.start) : "1")
-    .replace(/\{end\}/gi, vars.end !== undefined ? String(vars.end) : "")
-    .replace(/\{quality\}/gi, (vars.quality || "HD").toUpperCase())
-    .replace(/[^a-zA-Z0-9_\-\.]/g, "_");
+    .replace(/\{\s*topic\s*\}/gi, cleanTopic)
+    .replace(/\{\s*set\s*\}/gi, vars.set !== undefined ? String(vars.set) : "1")
+    .replace(/\{\s*start\s*\}/gi, vars.start !== undefined ? String(vars.start) : "1")
+    .replace(/\{\s*end\s*\}/gi, vars.end !== undefined ? String(vars.end) : "")
+    .replace(/\{\s*quality\s*\}/gi, (vars.quality || "HD").toUpperCase())
+    .replace(/[^a-zA-Z0-9_\-\.]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
 
   return name;
 }
@@ -180,10 +186,10 @@ export function renderExportModalPreviewHtml(state) {
       }).join("") : `
         <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
           <div style="font-size:32px; margin-bottom:8px;">📄</div>
-          <h4 style="margin:0 0 4px 0; color:#f0f6fc; font-size:14px;">
+          <h4 style="margin:0 0 4px 0; color:#0f172a; font-size:14px; font-weight:700;">
             ${exp.scope === 'range' ? `Custom Range: ${escapeHtml(exp.customRange || 'All')}` : `All Slides (1 to ${totalSlides})`}
           </h4>
-          <div style="font-size:11px; color:#8b949e; margin-bottom:12px;">
+          <div style="font-size:11px; color:#475569; margin-bottom:12px;">
             Target File: <b>${escapeHtml(formatFileName(exp.fileNamePattern, { topic: topicName, set: 1, start: 1, end: totalSlides, quality: exp.quality }))}.pdf</b>
           </div>
           <div style="display:flex; justify-content:center; gap:8px;">
@@ -242,8 +248,8 @@ export function renderExportModalHtml(state) {
           <div class="ppt-export-modal-title">
             <span style="font-size:18px;">📦</span>
             <div>
-              <h2 style="margin:0; font-size:16px; font-weight:700; color:#f0f6fc;">Export Hub & Batch Sets Generator</h2>
-              <span style="font-size:11px; color:#8b949e;">Total Slides: <b>${totalSlides}</b> | Topic: <b>${escapeHtml(topicName)}</b></span>
+              <h2 style="margin:0; font-size:16px; font-weight:700; color:#0f172a;">Export Hub & Batch Sets Generator</h2>
+              <span style="font-size:11px; color:#475569;">Total Slides: <b>${totalSlides}</b> | Topic: <b>${escapeHtml(topicName)}</b></span>
             </div>
           </div>
           <button class="ppt-export-modal-close" data-action="ppt-close-export-modal" title="Close (Esc)">✕</button>

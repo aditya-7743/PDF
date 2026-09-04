@@ -13,11 +13,11 @@ import { renderSlideCanvas } from "./components/slideCanvas.js";
 import { renderStatusBar } from "./components/statusBar.js";
 import { renderExportModalHtml } from "./components/exportModal.js";
 import { renderPasteModalHtml } from "./components/pasteModal.js";
+import { renderClearStorageModalHtml } from "./components/clearStorageModal.js";
 import { renderPptImportWizardModal } from "../pptUI.js";
 
 export function renderPptFullscreenOverlay(state) {
   const ppt = state.ppt || {};
-  if (!ppt.isFullscreenOpen) return "";
 
   const activeTab = ppt.fsActiveTab || "home";
   const globalSettings = ppt.settings || {};
@@ -31,7 +31,7 @@ export function renderPptFullscreenOverlay(state) {
   if (activeTab === "home") {
     ribbonContent = renderRibbonHome(state, settings, activeQ, activeIdx, questions.length, applyScope);
   } else if (activeTab === "design" || activeTab === "home2") {
-    ribbonContent = renderRibbonHome2(state, settings, activeQ, activeIdx, questions.length, applyScope);
+    ribbonContent = renderRibbonDesign(state, settings, activeQ, activeIdx, questions.length, applyScope);
   } else if (activeTab === "editor") {
     ribbonContent = renderRibbonEditor(state, settings, activeQ, activeIdx, questions.length, applyScope);
   } else if (activeTab === "insert") {
@@ -49,8 +49,11 @@ export function renderPptFullscreenOverlay(state) {
       <!-- 1. Top Window Title Bar with Quick Access Toolbar -->
       <header class="ppt-fs-titlebar">
         <div class="ppt-fs-title-left" style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="ppt-fs-home-btn" data-action="switch-mode" data-mode="home" title="Back to Home Dashboard" style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; font-size:12px; font-weight:750; background:linear-gradient(135deg, #0f8fa7, #12b39b); color:#ffffff; border:none; border-radius:5px; cursor:pointer;">
+            🏠 Home
+          </button>
           <span class="ppt-fs-app-logo">📊</span>
-          <span class="ppt-fs-app-name"><b>PowerPoint Slide Editor</b> — ${activeQ.topic || 'Maths Presentation'}</span>
+          <span class="ppt-fs-app-name"><b>PowerPoint Slide Editor</b> — ${escapeHtml(activeQ.topic || 'Maths Presentation')}</span>
           <div class="ppt-fs-quick-access" style="display:inline-flex; align-items:center; gap:4px; margin-left:12px;">
             <button type="button" class="ppt-fs-status-btn" data-action="ppt-undo" title="Undo Last Action (Ctrl+Z)" style="padding:2px 8px; font-size:12px; font-weight:700; background:rgba(255,255,255,0.15); color:#ffffff; border:1px solid rgba(255,255,255,0.3); border-radius:4px; cursor:pointer;">
               ↶ Undo
@@ -64,7 +67,7 @@ export function renderPptFullscreenOverlay(state) {
           <span class="ppt-fs-doc-badge">${questions.length} Slides</span>
         </div>
         <div class="ppt-fs-title-right">
-          <button class="ppt-fs-window-btn" data-action="ppt-close-fullscreen" title="Exit Full Screen (Esc)">✕</button>
+          <button class="ppt-fs-window-btn" data-action="switch-mode" data-mode="home" title="Back to Home (Esc)">✕</button>
         </div>
       </header>
 
@@ -100,9 +103,10 @@ export function renderPptFullscreenOverlay(state) {
       <!-- 5. Bottom Status Bar -->
       ${renderStatusBar(state)}
 
-      <!-- 6. Modals (Import Wizard, Paste Modal, Export Hub) -->
+      <!-- 6. Modals (Import Wizard, Paste Modal, Clear Storage Confirm, Export Hub) -->
       ${ppt.showImportWizard ? renderPptImportWizardModal(state) : ""}
       ${ppt.isPasteModalOpen ? renderPasteModalHtml(state) : ""}
+      ${ppt.showClearStorageModal ? renderClearStorageModalHtml(state) : ""}
       ${ppt.isExportModalOpen ? renderExportModalHtml(state) : ""}
     </div>
   `;

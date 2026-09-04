@@ -43,13 +43,19 @@ export function renderRibbonInsert(state, settings) {
       <div class="ppt-fs-ribbon-group" style="${!hasImage ? 'opacity:0.4; pointer-events:none;' : ''}">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px; justify-content:center;">
           <div style="display:flex; gap:3px;">
-            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-remove-image-bg" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="Automatically remove white background to make diagram transparent" style="font-weight:700; color:#10b981;">
+            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-remove-image-bg" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="Smart Remove White Background (Transparent & Preserves Text)" style="font-weight:700; color:#10b981;">
               🪄 Remove White BG
+            </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-make-transparent-math" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="High-contrast transparent math formula extraction">
+              ✨ Formula BG
             </button>
           </div>
           <div style="display:flex; gap:3px;">
-            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-make-transparent-math" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="High-contrast transparent math formula extraction">
-              ✨ Clean Formula BG
+            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-flood-remove-bg" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="Flood-Fill Outer Background from Edges Inward">
+              🌊 Flood Outer
+            </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-restore-image-bg" data-image-id="${selectedImg ? (selectedImg.id || '') : ''}" title="Restore pristine original un-cleared image">
+              ↺ Restore Original
             </button>
           </div>
         </div>

@@ -38,13 +38,14 @@ export async function exportQuestionsToPdf(questions, rawSettings, qualityMode =
   const sandbox = document.createElement("div");
   sandbox.id = "ppt-pdf-export-sandbox";
   sandbox.style.position = "fixed";
-  sandbox.style.left = "-9999px";
+  sandbox.style.left = "0";
   sandbox.style.top = "0";
   sandbox.style.width = "960px";
   sandbox.style.height = "540px";
   sandbox.style.zIndex = "-9999";
-  sandbox.style.overflow = "hidden";
+  sandbox.style.opacity = "0.01";
   sandbox.style.pointerEvents = "none";
+  sandbox.style.overflow = "hidden";
   sandbox.style.background = "#000000";
   document.body.appendChild(sandbox);
 
@@ -75,7 +76,7 @@ export async function exportQuestionsToPdf(questions, rawSettings, qualityMode =
           });
         }));
       }
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 60));
 
       let canvas;
       if (typeof window !== "undefined" && typeof window.html2canvas === "function") {
@@ -88,6 +89,10 @@ export async function exportQuestionsToPdf(questions, rawSettings, qualityMode =
           height: 540,
           windowWidth: 960,
           windowHeight: 540,
+          x: 0,
+          y: 0,
+          scrollX: 0,
+          scrollY: 0,
           backgroundColor: null
         });
       } else {
@@ -213,7 +218,7 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
     }
 
     // 1b. Exam Tag in Header
-    const examText = q.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+    const examText = q.exam || settings.defaultExam || "(Exam Name)";
     if (settings.showExamTag !== false && settings.examTagPosition === "header") {
       const examX = 110 * scale + Math.round((settings.examTagPosX || 0) * scale);
       const examY = (headerH / 2) + Math.round((settings.examTagPosY || 0) * scale);
@@ -371,7 +376,7 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
   }
 
   // 2e. Standalone Exam Tag Badge (Below Question / Above Options)
-  const examText = q.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+  const examText = q.exam || settings.defaultExam || "(Exam Name)";
   const examTagPos = settings.examTagPosition || "below-question";
   if (settings.showExamTag !== false && (examTagPos === "below-question" || examTagPos === "above-options")) {
     const tagFontSize = Math.round((settings.examFontSize || 15) * scale);
@@ -680,10 +685,15 @@ function downloadBlob(blob, fileName) {
   const a = document.createElement("a");
   a.href = url;
   a.download = fileName;
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    try {
+      if (a.parentNode) a.parentNode.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (_) {}
+  }, 4000);
 }
 
 function loadImageAsync(url) {

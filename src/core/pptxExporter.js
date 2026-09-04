@@ -141,7 +141,7 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
       }
 
       // 1b. Exam Tag in Header
-      const examText = q.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+      const examText = q.exam || settings.defaultExam || "(Exam Name)";
       if (settings.showExamTag !== false && settings.examTagPosition === "header") {
         slide.addText(examText, {
           x: 1.45 + ((settings.examTagPosX || 0) / 72),
@@ -310,7 +310,7 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
     }
 
     // 4b. Standalone Exam Tag Badge (Below Hindi Question - SSC GD / YouTube Lecture Style)
-    const examText = q.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+    const examText = q.exam || settings.defaultExam || "(Exam Name)";
     const examTagPos = settings.examTagPosition || "below-question";
     if (settings.showExamTag !== false && (examTagPos === "below-question" || examTagPos === "above-options")) {
       const examBadgeX = contentX + ((settings.examTagPosX || 0) / 72);

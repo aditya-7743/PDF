@@ -130,8 +130,8 @@ export const pptThemes = {
 export const defaultPptSettings = {
   theme: "maroon",
   topic: "RATIO & PROPORTION",
-  defaultExam: "SSC CGL 12/09/2025 (Shift 1)",
-  layoutPreset: "full-width",
+  defaultExam: "(Exam Name)",
+  layoutPreset: "standard",
   boxPosX: 0,
   boxPosY: 0,
   engPosX: 0,
@@ -164,22 +164,14 @@ export const defaultPptSettings = {
   dividerThickness: 2,
   dividerWidth: 100,
   dividerPosX: 0,
-  showDivider: true,
-  optionColumns: 2,
-  optionsLayout: "2-col",
-  optionFontSize: 17,
-  optionCardRadius: 8,
-  optionCardBorderWidth: 1.5,
-  optionCardPadding: 7,
-  optionGap: 8,
-  optionDynamicWidth: true,
-  optionDynamicHeight: true,
-  optionWidthPercent: 96,
-  questionBoxWidth: 100,
-  questionPadding: 12,
-  dividerSpacing: 4,
-  lineHeight: 1.34,
-  showFooter: true,
+  showHeader: false,
+  showQBadge: false,
+  showEnglish: false,
+  showHindi: false,
+  showExamTag: false,
+  showOptions: false,
+  showDivider: false,
+  showFooter: false,
   footerText: "Maths by Aditya | Telegram: @YourChannel",
   footerHeight: 24,
   footerFontSize: 12,
@@ -188,28 +180,74 @@ export const defaultPptSettings = {
   ...pptThemes.maroon,
 };
 
-export function getSlideSettings(globalSettings = {}, q = {}) {
-  if (!q || !q.settings || Object.keys(q.settings).length === 0) {
-    return globalSettings;
+export function isSlideElementActive(globalSettings = {}, q = {}, elemKey) {
+  if (!q) return false;
+  const qSettings = q.settings || {};
+
+  const flagMap = {
+    header: "showHeader",
+    qbadge: "showQBadge",
+    english: "showEnglish",
+    hindi: "showHindi",
+    divider: "showDivider",
+    exam: "showExamTag",
+    options: "showOptions",
+    footer: "showFooter"
+  };
+
+  const flagKey = flagMap[elemKey];
+  if (!flagKey) return false;
+
+  if (qSettings[flagKey] !== undefined) {
+    return Boolean(qSettings[flagKey]);
   }
-  return { ...globalSettings, ...q.settings };
+  if (globalSettings[flagKey] !== undefined) {
+    return Boolean(globalSettings[flagKey]);
+  }
+  return false;
+}
+
+export function getSlideSettings(globalSettings = {}, q = {}) {
+  const merged = { ...globalSettings };
+  if (q && q.settings) {
+    Object.assign(merged, q.settings);
+  }
+  if (q && q.bgImage) {
+    merged.bgImage = q.bgImage;
+  }
+
+  merged.showHeader = isSlideElementActive(globalSettings, q, "header");
+  merged.showQBadge = isSlideElementActive(globalSettings, q, "qbadge");
+  merged.showEnglish = isSlideElementActive(globalSettings, q, "english");
+  merged.showHindi = isSlideElementActive(globalSettings, q, "hindi");
+  merged.showDivider = isSlideElementActive(globalSettings, q, "divider");
+  merged.showExamTag = isSlideElementActive(globalSettings, q, "exam");
+  merged.showOptions = isSlideElementActive(globalSettings, q, "options");
+  merged.showFooter = isSlideElementActive(globalSettings, q, "footer");
+
+  return merged;
 }
 
 export const sampleQuestions = [
   {
     id: "q_1",
     number: "Q.1",
-    topic: "TOPIC",
+    topic: "",
     exam: "",
     english: "",
     hindi: "",
-    options: [
-      { key: "A", text: "" },
-      { key: "B", text: "" },
-      { key: "C", text: "" },
-      { key: "D", text: "" }
-    ],
-    answer: ""
+    options: [],
+    answer: "",
+    settings: {
+      showHeader: false,
+      showQBadge: false,
+      showEnglish: false,
+      showHindi: false,
+      showDivider: false,
+      showExamTag: false,
+      showOptions: false,
+      showFooter: false
+    }
   }
 ];
 

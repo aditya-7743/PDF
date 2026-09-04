@@ -89,10 +89,11 @@ document.addEventListener("keydown", (e) => handlePptSlideNavKeydown(e, state, r
 
 
 function normalizeAppMode(mode = "") {
+  if (mode === "equation") return "equation";
   if (mode === "figures" || mode === "drawing" || mode === "math-figures") return "math-figures";
   if (mode === "ppt" || mode === "ppt-builder" || mode === "slides") return "ppt-builder";
   if (mode === "image-tools" || mode === "image-pdf" || mode === "images") return "image-tools";
-  return "equation";
+  return "home";
 }
 
 function normalizeImageToolMode(mode = "") {
@@ -101,7 +102,7 @@ function normalizeImageToolMode(mode = "") {
 
 function loadInitialState() {
   const blankState = {
-    mode: "equation",
+    mode: "home",
     imageToolMode: "image-pdf",
     input: branches.editor.initialInput,
     history: [],
@@ -168,9 +169,14 @@ function loadInitialState() {
       pptQuestions = JSON.parse(JSON.stringify(blankState.ppt.questions));
     }
 
+    const isFirstTimeHome = !parsed.hasSeenHomeV1;
+    const initialMode = isFirstTimeHome ? "home" : normalizeAppMode(parsed.mode || "home");
+
     return {
       ...blankState,
       ...parsed,
+      hasSeenHomeV1: true,
+      mode: initialMode,
       drawing: { ...blankState.drawing, ...(parsed.drawing || {}) },
       ppt: {
         ...blankState.ppt,
@@ -345,8 +351,23 @@ function bindEvents() {
     bindImageResizeEvents();
   } else if (currentMode === "math-figures") {
     bindMathFiguresEvents();
-  } else {
+  } else if (currentMode === "equation") {
     bindEquationEditorEvents();
+  } else {
+    app.querySelectorAll(".home-card").forEach((card) => {
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const targetMode = normalizeAppMode(card.dataset.mode);
+          if (targetMode && state.mode !== targetMode) {
+            recordUndo();
+            state.mode = targetMode;
+            saveState(state);
+            render();
+          }
+        }
+      });
+    });
   }
 }
 

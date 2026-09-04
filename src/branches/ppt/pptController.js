@@ -1,10 +1,11 @@
 // PPT Slide Builder Controller (Events, Canvas Drag & Resize, Exports)
-import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings } from "../pptBranch.js";
+import { defaultPptSettings, sampleQuestions, pptThemes, getSlideSettings, isSlideElementActive } from "../pptBranch.js";
 import { getQuestionImages } from "./pptUI.js";
 import { parseDocxFile, parseQuestionsText } from "../../core/docxParser.js";
+import { saveState } from "../../core/store.js";
 import { exportQuestionsToPdf } from "../../core/pdfExporter.js";
 import { exportQuestionsToPptx } from "../../core/pptxExporter.js";
-import { handleFullscreenAction, bindFullscreenEvents } from "./fullscreen/fullscreenController.js";
+import { handleFullscreenAction, bindFullscreenEvents, calculateAutoFitZoom } from "./fullscreen/fullscreenController.js";
 import { renderThumbnailSlideHtml } from "./fullscreen/components/slideThumbnails.js";
 import { parseRangeToIndices, calculateBatchSets, formatFileName, renderExportModalPreviewHtml } from "./fullscreen/components/exportModal.js";
 import { openInPlaceCrop, initInPlaceCrop, finalizeInPlaceCrop } from "./components/inPlaceCropEngine.js";
@@ -142,8 +143,8 @@ export function ensurePptState(state) {
   }
   state.ppt.settings = { ...defaultPptSettings, ...(state.ppt.settings || {}) };
   if (!state.ppt.questions || !state.ppt.questions.length) state.ppt.questions = [...sampleQuestions];
-  if (!state.ppt.fsZoom || state.ppt.fsZoom === 90 || state.ppt.fsZoom === 85 || state.ppt.fsZoom === 95 || state.ppt.fsZoom === 110) {
-    state.ppt.fsZoom = 100;
+  if (state.ppt.fsAutoFit === undefined) {
+    state.ppt.fsAutoFit = true;
   }
   if (!state.ppt.exportSettings) {
     state.ppt.exportSettings = {
@@ -168,7 +169,7 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (file) {
-        await processUploadedPptFile(file, app, state, recordUndo, render);
+        await processUploadedPptFile(file, app, state, recordUndo, render, saveState);
       }
     });
   }
@@ -202,7 +203,7 @@ export function bindPptEvents(app, state, render, recordUndo, saveState, undoSta
       dropzone.classList.remove("is-dragover");
       const file = e.dataTransfer.files?.[0];
       if (file) {
-        await processUploadedPptFile(file, app, state, recordUndo, render);
+        await processUploadedPptFile(file, app, state, recordUndo, render, saveState);
       }
     });
   }
@@ -848,12 +849,145 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
         }
         Object.assign(targetObj, themeObj);
         targetObj.theme = themeKey;
+        if (activeQ && activeQ.layout === "blank" && !activeQ.english) {
+          activeQ.layout = ppt.settings.layoutPreset || "right-split";
+        }
         saveState(state);
         render();
       }
       break;
     }
 
+    case "ppt-add-layout-element": {
+      const elem = target.dataset.element; // "header", "qbadge", "english", "hindi", "divider", "exam", "options", "footer"
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      const flagKey = elem === "header" ? "showHeader" : (elem === "footer" ? "showFooter" : (elem === "qbadge" ? "showQBadge" : (elem === "english" ? "showEnglish" : (elem === "hindi" ? "showHindi" : (elem === "divider" ? "showDivider" : (elem === "exam" ? "showExamTag" : "showOptions"))))));
+      const currentActive = isSlideElementActive(ppt.settings, activeQ, elem);
+      const nextActive = !currentActive;
+
+      targetObj[flagKey] = nextActive;
+
+      if (nextActive) {
+        if (activeQ && activeQ.layout === "blank") {
+          activeQ.layout = "standard";
+        }
+        if (ppt.settings.layoutPreset === "blank") {
+          ppt.settings.layoutPreset = "standard";
+        }
+        if (targetObj.layoutPreset === "blank") {
+          targetObj.layoutPreset = "standard";
+        }
+        const CANONICAL_ORDER = ["qbadge", "english", "divider", "hindi", "exam", "options"];
+        if (!targetObj.elementOrder || !targetObj.elementOrder.length) {
+          targetObj.elementOrder = [...CANONICAL_ORDER];
+        } else if (!targetObj.elementOrder.includes(elem) && elem !== "header" && elem !== "footer") {
+          const desiredIdx = CANONICAL_ORDER.indexOf(elem);
+          let inserted = false;
+          for (let i = 0; i < targetObj.elementOrder.length; i++) {
+            const curIdx = CANONICAL_ORDER.indexOf(targetObj.elementOrder[i]);
+            if (curIdx > desiredIdx) {
+              targetObj.elementOrder.splice(i, 0, elem);
+              inserted = true;
+              break;
+            }
+          }
+          if (!inserted) targetObj.elementOrder.push(elem);
+        }
+        if (activeQ) {
+          if (elem === "options" && (!activeQ.options || activeQ.options.length === 0)) {
+            activeQ.options = [
+              { key: "A", text: "" },
+              { key: "B", text: "" },
+              { key: "C", text: "" },
+              { key: "D", text: "" }
+            ];
+          } else if (elem === "exam" && (!activeQ.exam || activeQ.exam.includes("SSC GD 22") || activeQ.exam.includes("SSC CGL"))) {
+            activeQ.exam = ppt.settings.defaultExam || "(Exam Name)";
+          } else if (elem === "english" && activeQ.english === undefined) {
+            activeQ.english = "";
+          } else if (elem === "hindi" && activeQ.hindi === undefined) {
+            activeQ.hindi = "";
+          } else if (elem === "qbadge" && !activeQ.number) {
+            activeQ.number = `Q.${ppt.activeQuestionIndex + 1}`;
+          }
+        }
+      }
+
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) {
+            delete q.settings[flagKey];
+          }
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-move-layout-element": {
+      const elem = target.dataset.element;
+      const dir = target.dataset.dir; // "up" or "down"
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.elementOrder = targetObj.elementOrder ? [...targetObj.elementOrder] : ["qbadge", "english", "divider", "hindi", "exam", "options"];
+      const idx = targetObj.elementOrder.indexOf(elem);
+      if (idx !== -1) {
+        if (dir === "up" && idx > 0) {
+          const temp = targetObj.elementOrder[idx - 1];
+          targetObj.elementOrder[idx - 1] = targetObj.elementOrder[idx];
+          targetObj.elementOrder[idx] = temp;
+        } else if (dir === "down" && idx < targetObj.elementOrder.length - 1) {
+          const temp = targetObj.elementOrder[idx + 1];
+          targetObj.elementOrder[idx + 1] = targetObj.elementOrder[idx];
+          targetObj.elementOrder[idx] = temp;
+        }
+        saveState(state);
+        render();
+      }
+      break;
+    }
+    case "ppt-remove-layout-element": {
+      const elem = target.dataset.element;
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      const flagKey = elem === "header" ? "showHeader" : (elem === "footer" ? "showFooter" : (elem === "qbadge" ? "showQBadge" : (elem === "english" ? "showEnglish" : (elem === "hindi" ? "showHindi" : (elem === "divider" ? "showDivider" : (elem === "exam" ? "showExamTag" : "showOptions"))))));
+      targetObj[flagKey] = false;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) {
+            delete q.settings[flagKey];
+          }
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-reset-layout-order": {
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.elementOrder = ["qbadge", "english", "divider", "hindi", "exam", "options"];
+      targetObj.showHeader = true;
+      targetObj.showQBadge = true;
+      targetObj.showEnglish = true;
+      targetObj.showHindi = true;
+      targetObj.showExamTag = true;
+      targetObj.showOptions = true;
+      targetObj.showDivider = true;
+      targetObj.showFooter = true;
+      saveState(state);
+      render();
+      break;
+    }
     case "ppt-set-apply-scope": {
       const scope = target.dataset.scope || (ppt.applyScope === "current" ? "all" : "current");
       ppt.applyScope = scope;
@@ -938,19 +1072,36 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     case "ppt-set-preset":
     case "ppt-set-layout-preset": {
       const rawPreset = target.dataset.preset || "standard";
-      const preset = (rawPreset === "standard") ? "full-width" : rawPreset;
       recordUndo();
       const isCurrentScope = (ppt.applyScope === "current");
       const activeQ = ppt.questions[ppt.activeQuestionIndex];
       const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
-      targetObj.layoutPreset = preset;
-      if (preset === "right-split") {
+
+      if (rawPreset === "right-split") {
+        targetObj.layoutPreset = "right-split";
         targetObj.boxPosX = 42;
         targetObj.questionBoxWidth = 56;
-      } else if (preset === "left-split") {
+        if (activeQ) activeQ.layout = "right-split";
+      } else if (rawPreset === "stacked" || rawPreset === "1-col") {
+        targetObj.layoutPreset = "standard";
+        targetObj.optionsLayout = "1-col";
         targetObj.boxPosX = 0;
-        targetObj.questionBoxWidth = 56;
+        targetObj.questionBoxWidth = 100;
+        if (activeQ) activeQ.layout = "standard";
+      } else if (rawPreset === "4-col" || rawPreset === "four-col" || rawPreset === "1-line") {
+        targetObj.layoutPreset = "standard";
+        targetObj.optionsLayout = "4-col";
+        targetObj.boxPosX = 0;
+        targetObj.questionBoxWidth = 100;
+        if (activeQ) activeQ.layout = "standard";
+      } else if (rawPreset === "standard" || rawPreset === "2-col" || rawPreset === "full-width") {
+        targetObj.layoutPreset = "standard";
+        targetObj.optionsLayout = "2-col";
+        targetObj.boxPosX = 0;
+        targetObj.questionBoxWidth = 100;
+        if (activeQ) activeQ.layout = "standard";
       } else {
+        targetObj.layoutPreset = rawPreset;
         targetObj.boxPosX = 0;
         targetObj.questionBoxWidth = 100;
       }
@@ -1011,7 +1162,23 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     case "ppt-confirm-wizard-generate": {
       recordUndo();
       if (ppt.pendingImportQuestions && ppt.pendingImportQuestions.length) {
-        ppt.questions = ppt.pendingImportQuestions;
+        ppt.questions = ppt.pendingImportQuestions.map((q) => {
+          const s = q.settings || {};
+          return {
+            ...q,
+            settings: {
+              ...s,
+              showHeader: true,
+              showQBadge: true,
+              showEnglish: Boolean(q.english && q.english.trim()),
+              showHindi: Boolean(q.hindi && q.hindi.trim()),
+              showDivider: Boolean(q.english && q.hindi),
+              showExamTag: Boolean(q.exam && q.exam.trim()),
+              showOptions: Boolean(q.options && q.options.length > 0 && q.options.some(o => o.text && o.text.trim())),
+              showFooter: true
+            }
+          };
+        });
         ppt.activeQuestionIndex = 0;
       }
       if (ppt.wizardSettings) {
@@ -1085,6 +1252,47 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
     case "ppt-browse-file": {
       const fileInput = app.querySelector("[data-ppt-file-input]");
       if (fileInput) fileInput.click();
+      break;
+    }
+    case "ppt-open-clear-modal":
+    case "ppt-confirm-clear-storage":
+    case "ppt-clear-all-data": {
+      if (!window.confirm("Are you sure you want to clear all slides and data?")) {
+        return;
+      }
+      try {
+        localStorage.clear();
+      } catch (err) {
+        console.warn("Could not clear localStorage:", err);
+      }
+      recordUndo();
+      ppt.showClearStorageModal = false;
+      ppt.questions = [
+        {
+          id: `q_${Date.now()}_1`,
+          number: "Q.1",
+          topic: ppt.settings?.topic || "",
+          exam: "",
+          english: "",
+          hindi: "",
+          options: [],
+          correctAnswer: "",
+          explanation: "",
+          layout: ppt.settings?.layoutPreset || "standard",
+          images: [],
+          settings: {}
+        }
+      ];
+      ppt.activeQuestionIndex = 0;
+      ppt.selectedImageId = null;
+      ppt.activeCrop = null;
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-close-clear-modal": {
+      ppt.showClearStorageModal = false;
+      render();
       break;
     }
     case "ppt-open-paste-modal":
@@ -1177,20 +1385,30 @@ Ans: C (SSC GD 2024 Shift 2)`;
       const parsed = parseQuestionsText(rawText, defaultTopic);
       if (parsed.length) {
         recordUndo();
-        ppt.pendingImportQuestions = parsed;
-        ppt.wizardSettings = {
-          ...ppt.settings,
-          layoutPreset: "right-split",
-          boxPosX: 42,
-          questionBoxWidth: 56,
-          optionStyle: "clean",
-          theme: "dark",
-          topic: defaultTopic,
-          ...(pptThemes?.dark || {})
-        };
-        ppt.showImportWizard = true;
+        ppt.questions = parsed.map((q, idx) => {
+          const s = q.settings || {};
+          return {
+            ...q,
+            id: q.id || `q_${Date.now()}_${idx}`,
+            number: q.number || `Q.${idx + 1}`,
+            topic: q.topic || defaultTopic,
+            settings: {
+              ...s,
+              showEnglish: Boolean(q.english && q.english.trim()),
+              showHindi: Boolean(q.hindi && q.hindi.trim()),
+              showDivider: Boolean(q.english && q.hindi),
+              showExamTag: Boolean(q.exam && q.exam.trim()),
+              showOptions: Boolean(q.options && q.options.length > 0 && q.options.some(o => o.text && o.text.trim()))
+            }
+          };
+        });
+        ppt.activeQuestionIndex = 0;
+        ppt.showImportWizard = false;
+        ppt.pendingImportQuestions = null;
+        ppt.wizardSettings = null;
         ppt.showPasteBox = false;
         ppt.isPasteModalOpen = false;
+        saveState(state);
         render();
       } else {
         alert("Could not parse any questions. Please check the format.");
@@ -1263,17 +1481,22 @@ Ans: C (SSC GD 2024 Shift 2)`;
       const newSlide = {
         id: `q_${Date.now()}`,
         number: `Q.${newIndex}`,
-        exam: ppt.settings.defaultExam || "SSC CGL (Shift 1)",
-        topic: ppt.settings.topic || "TOPIC",
-        topicHtml: ppt.settings.topicHtml || "",
+        exam: "",
+        topic: "",
+        topicHtml: "",
         english: "",
         hindi: "",
-        options: [
-          { key: "A", text: "" },
-          { key: "B", text: "" },
-          { key: "C", text: "" },
-          { key: "D", text: "" }
-        ]
+        options: [],
+        settings: {
+          showHeader: false,
+          showQBadge: false,
+          showEnglish: false,
+          showHindi: false,
+          showDivider: false,
+          showExamTag: false,
+          showOptions: false,
+          showFooter: false
+        }
       };
       ppt.questions.splice(insertIdx, 0, newSlide);
       ppt.activeQuestionIndex = insertIdx;
@@ -1299,7 +1522,13 @@ Ans: C (SSC GD 2024 Shift 2)`;
         options: [],
         settings: {
           slideBg: "#FFFFFF",
+          showHeader: false,
+          showQBadge: false,
+          showEnglish: false,
+          showHindi: false,
           showDivider: false,
+          showExamTag: false,
+          showOptions: false,
           showFooter: false
         }
       };
@@ -1433,7 +1662,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
     case "ppt-upload-docx": {
       const file = target.files?.[0];
       if (file) {
-        processUploadedPptFile(file, app, state, recordUndo, render);
+        processUploadedPptFile(file, app, state, recordUndo, render, saveState);
       }
       break;
     }
@@ -1445,6 +1674,47 @@ Ans: C (SSC GD 2024 Shift 2)`;
       }
       break;
     }
+    case "ppt-trigger-bg-upload": {
+      const bgInput = app.querySelector(".ppt-fs-bg-hidden-input") || app.querySelector(".ppt-fs-bg-image-hidden-input") || app.querySelector("[data-ppt-bg-file-input]");
+      if (bgInput) {
+        bgInput.value = "";
+        bgInput.click();
+      } else {
+        const tempInput = document.createElement("input");
+        tempInput.type = "file";
+        tempInput.accept = "image/*";
+        tempInput.style.display = "none";
+        tempInput.onchange = (e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (re) => {
+              recordUndo();
+              if (state.ppt.applyScope === "current") {
+                if (activeQ) {
+                  activeQ.bgImage = dataUrl;
+                  activeQ.settings = activeQ.settings || {};
+                  activeQ.settings.bgImage = dataUrl;
+                }
+              } else {
+                state.ppt.settings.bgImage = dataUrl;
+                state.ppt.questions.forEach((q) => {
+                  q.bgImage = dataUrl;
+                  if (q.settings) q.settings.bgImage = dataUrl;
+                });
+              }
+              saveState(state);
+              render();
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        document.body.appendChild(tempInput);
+        tempInput.click();
+        setTimeout(() => { if (tempInput.parentNode) document.body.removeChild(tempInput); }, 60000);
+      }
+      break;
+    }
     case "ppt-upload-bg-image": {
       const file = target.files?.[0];
       if (file) {
@@ -1453,9 +1723,16 @@ Ans: C (SSC GD 2024 Shift 2)`;
           recordUndo();
           const dataUrl = re.target.result;
           if (state.ppt.applyScope === "current") {
-            if (activeQ) activeQ.bgImage = dataUrl;
+            if (activeQ) {
+              activeQ.bgImage = dataUrl;
+              if (activeQ.settings) activeQ.settings.bgImage = dataUrl;
+            }
           } else {
             state.ppt.settings.bgImage = dataUrl;
+            state.ppt.questions.forEach((q) => {
+              q.bgImage = dataUrl;
+              if (q.settings) q.settings.bgImage = dataUrl;
+            });
           }
           saveState(state);
           render();
@@ -1467,10 +1744,16 @@ Ans: C (SSC GD 2024 Shift 2)`;
     case "ppt-clear-bg-image": {
       recordUndo();
       if (state.ppt.applyScope === "current") {
-        if (activeQ) delete activeQ.bgImage;
+        if (activeQ) {
+          delete activeQ.bgImage;
+          if (activeQ.settings) delete activeQ.settings.bgImage;
+        }
       } else {
         delete state.ppt.settings.bgImage;
-        state.ppt.questions.forEach((q) => { delete q.bgImage; });
+        state.ppt.questions.forEach((q) => {
+          delete q.bgImage;
+          if (q.settings) delete q.settings.bgImage;
+        });
       }
       saveState(state);
       render();
@@ -1528,8 +1811,12 @@ Ans: C (SSC GD 2024 Shift 2)`;
       const selectedImg = getActiveSelectedImage(state);
       if (selectedImg && (selectedImg.dataUrl || typeof selectedImg === "string")) {
         recordUndo();
-        const dataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
-        removeImageBackground(dataUrl, 35).then((transparentUrl) => {
+        const currentDataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
+        if (typeof selectedImg === "object") {
+          selectedImg.originalDataUrl = selectedImg.originalDataUrl || currentDataUrl;
+        }
+        const sourceDataUrl = (typeof selectedImg === "object" && selectedImg.originalDataUrl) ? selectedImg.originalDataUrl : currentDataUrl;
+        removeImageBackground(sourceDataUrl, { mode: "white", tolerance: 35 }).then((transparentUrl) => {
           if (typeof selectedImg === "object") {
             selectedImg.dataUrl = transparentUrl;
           } else {
@@ -1545,8 +1832,12 @@ Ans: C (SSC GD 2024 Shift 2)`;
       const selectedImg = getActiveSelectedImage(state);
       if (selectedImg && (selectedImg.dataUrl || typeof selectedImg === "string")) {
         recordUndo();
-        const dataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
-        removeImageBackground(dataUrl, 50).then((transparentUrl) => {
+        const currentDataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
+        if (typeof selectedImg === "object") {
+          selectedImg.originalDataUrl = selectedImg.originalDataUrl || currentDataUrl;
+        }
+        const sourceDataUrl = (typeof selectedImg === "object" && selectedImg.originalDataUrl) ? selectedImg.originalDataUrl : currentDataUrl;
+        removeImageBackground(sourceDataUrl, { mode: "math", tolerance: 40 }).then((transparentUrl) => {
           if (typeof selectedImg === "object") {
             selectedImg.dataUrl = transparentUrl;
             selectedImg.contrast = 35;
@@ -1556,6 +1847,37 @@ Ans: C (SSC GD 2024 Shift 2)`;
           saveState(state);
           render();
         });
+      }
+      break;
+    }
+    case "ppt-flood-remove-bg": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && (selectedImg.dataUrl || typeof selectedImg === "string")) {
+        recordUndo();
+        const currentDataUrl = typeof selectedImg === "string" ? selectedImg : selectedImg.dataUrl;
+        if (typeof selectedImg === "object") {
+          selectedImg.originalDataUrl = selectedImg.originalDataUrl || currentDataUrl;
+        }
+        const sourceDataUrl = (typeof selectedImg === "object" && selectedImg.originalDataUrl) ? selectedImg.originalDataUrl : currentDataUrl;
+        removeImageBackground(sourceDataUrl, { mode: "flood", tolerance: 35 }).then((transparentUrl) => {
+          if (typeof selectedImg === "object") {
+            selectedImg.dataUrl = transparentUrl;
+          } else {
+            activeQ.image = transparentUrl;
+          }
+          saveState(state);
+          render();
+        });
+      }
+      break;
+    }
+    case "ppt-restore-image-bg": {
+      const selectedImg = getActiveSelectedImage(state);
+      if (selectedImg && typeof selectedImg === "object" && selectedImg.originalDataUrl) {
+        recordUndo();
+        selectedImg.dataUrl = selectedImg.originalDataUrl;
+        saveState(state);
+        render();
       }
       break;
     }
@@ -1623,7 +1945,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
   }
 }
 
-export async function processUploadedPptFile(file, app, state, recordUndo, render) {
+export async function processUploadedPptFile(file, app, state, recordUndo, render, saveStateParam) {
   ensurePptState(state);
   const isDocx = file.name.endsWith(".docx") || file.type.includes("wordprocessingml");
 
@@ -1638,17 +1960,32 @@ export async function processUploadedPptFile(file, app, state, recordUndo, rende
 
     if (parsed && parsed.length) {
       recordUndo();
-      state.ppt.pendingImportQuestions = parsed;
-      state.ppt.wizardSettings = {
-        ...state.ppt.settings,
-        layoutPreset: "right-split",
-        boxPosX: 42,
-        questionBoxWidth: 56,
-        optionStyle: "clean",
-        theme: "dark",
-        ...(pptThemes?.dark || {})
-      };
-      state.ppt.showImportWizard = true;
+      state.ppt.questions = parsed.map((q, idx) => {
+        const s = q.settings || {};
+        return {
+          ...q,
+          id: q.id || `q_${Date.now()}_${idx}`,
+          number: q.number || `Q.${idx + 1}`,
+          topic: q.topic || state.ppt.settings.topic || "TOPIC",
+          settings: {
+            ...s,
+            showEnglish: Boolean(q.english && q.english.trim()),
+            showHindi: Boolean(q.hindi && q.hindi.trim()),
+            showDivider: Boolean(q.english && q.hindi),
+            showExamTag: Boolean(q.exam && q.exam.trim()),
+            showOptions: Boolean(q.options && q.options.length > 0 && q.options.some(o => o.text && o.text.trim()))
+          }
+        };
+      });
+      state.ppt.activeQuestionIndex = 0;
+      state.ppt.showImportWizard = false;
+      state.ppt.pendingImportQuestions = null;
+      state.ppt.wizardSettings = null;
+      if (typeof saveStateParam === "function") {
+        saveStateParam(state);
+      } else {
+        saveState(state);
+      }
       render();
     } else {
       alert("No questions could be extracted from this file. Please check format.");
@@ -1873,7 +2210,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
 
       const wrapperRect = canvasWrapper.getBoundingClientRect();
       const stageScaler = canvasWrapper.closest(".ppt-fs-stage-scaler");
-      const zoomScale = stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1;
+      const zoomScale = (wrapperRect && wrapperRect.width > 0) ? (wrapperRect.width / 960) : (stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1);
 
       const startCanvasX = (e.clientX - wrapperRect.left) / zoomScale;
       const startCanvasY = (e.clientY - wrapperRect.top) / zoomScale;
@@ -1999,8 +2336,9 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
 
         const startX = e.clientX;
         const startY = e.clientY;
+        const wrapperRect = canvasWrapper.getBoundingClientRect();
         const stageScaler = canvasWrapper.closest(".ppt-fs-stage-scaler");
-        const zoomScale = stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1;
+        const zoomScale = (wrapperRect && wrapperRect.width > 0) ? (wrapperRect.width / 960) : (stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1);
         let hasMoved = false;
 
         function setTransform(key, value) {
@@ -2036,26 +2374,26 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           groupItems.forEach((item) => {
             const { type, targetImg, initialImage } = item;
             if (type === "topic-position") {
-              setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
-              setTransform("topicPosY", Math.round((initialSettings.topicPosY || 0) + deltaY));
+              setTransform("topicPosX", Math.round((Number.parseFloat(initialSettings.topicPosX) || 0) + deltaX));
+              setTransform("topicPosY", Math.round((Number.parseFloat(initialSettings.topicPosY) || 0) + deltaY));
             } else if (type === "qbadge-position") {
-              setTransform("qBadgePosX", Math.round((initialSettings.qBadgePosX || 0) + deltaX));
-              setTransform("qBadgePosY", Math.round((initialSettings.qBadgePosY || 0) + deltaY));
+              setTransform("qBadgePosX", Math.round((Number.parseFloat(initialSettings.qBadgePosX) || 0) + deltaX));
+              setTransform("qBadgePosY", Math.round((Number.parseFloat(initialSettings.qBadgePosY) || 0) + deltaY));
             } else if (type === "exam-position") {
-              setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
-              setTransform("examTagPosY", Math.round((initialSettings.examTagPosY || 0) + deltaY));
+              setTransform("examTagPosX", Math.round((Number.parseFloat(initialSettings.examTagPosX) || 0) + deltaX));
+              setTransform("examTagPosY", Math.round((Number.parseFloat(initialSettings.examTagPosY) || 0) + deltaY));
             } else if (type === "eng-position") {
-              setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
-              setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+              setTransform("engPosX", Math.round((Number.parseFloat(initialSettings.engPosX) || 0) + deltaX));
+              setTransform("engPosY", Math.round((Number.parseFloat(initialSettings.engPosY) || 0) + deltaY));
             } else if (type === "hindi-position") {
-              setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
-              setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+              setTransform("hindiPosX", Math.round((Number.parseFloat(initialSettings.hindiPosX) || 0) + deltaX));
+              setTransform("hindiPosY", Math.round((Number.parseFloat(initialSettings.hindiPosY) || 0) + deltaY));
             } else if (type === "divider-position") {
-              setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
-              setTransform("dividerPosY", Math.round((initialSettings.dividerPosY || 0) + deltaY));
+              setTransform("dividerPosX", Math.round((Number.parseFloat(initialSettings.dividerPosX) || 0) + deltaX));
+              setTransform("dividerPosY", Math.round((Number.parseFloat(initialSettings.dividerPosY) || 0) + deltaY));
             } else if (type === "options-position") {
-              setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
-              setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+              setTransform("optionsPosX", Math.round((Number.parseFloat(initialSettings.optionsPosX) || 0) + deltaX));
+              setTransform("optionsPosY", Math.round((Number.parseFloat(initialSettings.optionsPosY) || 0) + deltaY));
             } else if (type === "image-position" && targetImg && initialImage) {
               targetImg.posX = Math.round((initialImage.posX || 0) + deltaX);
               targetImg.posY = Math.round((initialImage.posY || 0) + deltaY);
@@ -2124,7 +2462,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
         const startX = e.clientX;
         const startY = e.clientY;
         const stageScaler = canvasWrapper.closest(".ppt-fs-stage-scaler");
-        const zoomScale = stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1;
+        const zoomScale = (wrapperRect && wrapperRect.width > 0) ? (wrapperRect.width / 960) : (stageScaler ? ((state.ppt.fsZoom || 100) / 100) : 1);
 
         function setTransform(key, value) {
           if (isCurrentScope && activeQ) {
@@ -2147,48 +2485,48 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           const clampW = (initialW, delta) => Math.round(Math.max(10, Math.min(250, (initialW || 100) + delta)));
 
           if (type === "eng-position") {
-            setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
-            setTransform("engPosY", Math.round((initialSettings.engPosY || 0) + deltaY));
+            setTransform("engPosX", Math.round((Number.parseFloat(initialSettings.engPosX) || 0) + deltaX));
+            setTransform("engPosY", Math.round((Number.parseFloat(initialSettings.engPosY) || 0) + deltaY));
           } else if (type === "eng-resize-e") {
             setTransform("engWidth", clampW(initialSettings.engWidth, deltaPercent));
           } else if (type === "eng-resize-w") {
             setTransform("engWidth", clampW(initialSettings.engWidth, -deltaPercent));
-            setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+            setTransform("engPosX", Math.round((Number.parseFloat(initialSettings.engPosX) || 0) + deltaX));
           } else if (type === "eng-resize-se" || type === "eng-resize-ne") {
             setTransform("engWidth", clampW(initialSettings.engWidth, deltaPercent));
           } else if (type === "eng-resize-sw" || type === "eng-resize-nw") {
             setTransform("engWidth", clampW(initialSettings.engWidth, -deltaPercent));
-            setTransform("engPosX", Math.round((initialSettings.engPosX || 0) + deltaX));
+            setTransform("engPosX", Math.round((Number.parseFloat(initialSettings.engPosX) || 0) + deltaX));
           }
 
           else if (type === "hindi-position") {
-            setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
-            setTransform("hindiPosY", Math.round((initialSettings.hindiPosY || 0) + deltaY));
+            setTransform("hindiPosX", Math.round((Number.parseFloat(initialSettings.hindiPosX) || 0) + deltaX));
+            setTransform("hindiPosY", Math.round((Number.parseFloat(initialSettings.hindiPosY) || 0) + deltaY));
           } else if (type === "hindi-resize-e") {
             setTransform("hindiWidth", clampW(initialSettings.hindiWidth, deltaPercent));
           } else if (type === "hindi-resize-w") {
             setTransform("hindiWidth", clampW(initialSettings.hindiWidth, -deltaPercent));
-            setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+            setTransform("hindiPosX", Math.round((Number.parseFloat(initialSettings.hindiPosX) || 0) + deltaX));
           } else if (type === "hindi-resize-se" || type === "hindi-resize-ne") {
             setTransform("hindiWidth", clampW(initialSettings.hindiWidth, deltaPercent));
           } else if (type === "hindi-resize-sw" || type === "hindi-resize-nw") {
             setTransform("hindiWidth", clampW(initialSettings.hindiWidth, -deltaPercent));
-            setTransform("hindiPosX", Math.round((initialSettings.hindiPosX || 0) + deltaX));
+            setTransform("hindiPosX", Math.round((Number.parseFloat(initialSettings.hindiPosX) || 0) + deltaX));
           }
 
           else if (type === "divider-position") {
-            setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
-            setTransform("dividerPosY", Math.round((initialSettings.dividerPosY || 0) + deltaY));
+            setTransform("dividerPosX", Math.round((Number.parseFloat(initialSettings.dividerPosX) || 0) + deltaX));
+            setTransform("dividerPosY", Math.round((Number.parseFloat(initialSettings.dividerPosY) || 0) + deltaY));
           } else if (type === "divider-resize-e") {
             setTransform("dividerWidth", clampW(initialSettings.dividerWidth, deltaPercent));
           } else if (type === "divider-resize-w") {
             setTransform("dividerWidth", clampW(initialSettings.dividerWidth, -deltaPercent));
-            setTransform("dividerPosX", Math.round((initialSettings.dividerPosX || 0) + deltaX));
+            setTransform("dividerPosX", Math.round((Number.parseFloat(initialSettings.dividerPosX) || 0) + deltaX));
           }
 
           else if (type === "qbadge-position") {
-            setTransform("qBadgePosX", Math.round((initialSettings.qBadgePosX || 0) + deltaX));
-            setTransform("qBadgePosY", Math.round((initialSettings.qBadgePosY || 0) + deltaY));
+            setTransform("qBadgePosX", Math.round((Number.parseFloat(initialSettings.qBadgePosX) || 0) + deltaX));
+            setTransform("qBadgePosY", Math.round((Number.parseFloat(initialSettings.qBadgePosY) || 0) + deltaY));
           } else if (type === "qbadge-resize-se" || type === "qbadge-resize-ne" || type === "qbadge-resize-sw" || type === "qbadge-resize-nw") {
             const scaleDelta = (type === "qbadge-resize-se" || type === "qbadge-resize-ne") ? deltaX : -deltaX;
             const newSize = Math.round(Math.max(10, Math.min(48, (initialSettings.qBadgeSize || 18) + (scaleDelta / 6))));
@@ -2196,8 +2534,8 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           }
 
           else if (type === "topic-position") {
-            setTransform("topicPosX", Math.round((initialSettings.topicPosX || 0) + deltaX));
-            setTransform("topicPosY", Math.round((initialSettings.topicPosY || 0) + deltaY));
+            setTransform("topicPosX", Math.round((Number.parseFloat(initialSettings.topicPosX) || 0) + deltaX));
+            setTransform("topicPosY", Math.round((Number.parseFloat(initialSettings.topicPosY) || 0) + deltaY));
           } else if (type === "topic-resize-se" || type === "topic-resize-ne" || type === "topic-resize-sw" || type === "topic-resize-nw") {
             const scaleDelta = (type === "topic-resize-se" || type === "topic-resize-ne") ? deltaX : -deltaX;
             const newSize = Math.round(Math.max(12, Math.min(48, (initialSettings.topicFontSize || 20) + (scaleDelta / 8))));
@@ -2205,8 +2543,8 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           }
 
           else if (type === "exam-position") {
-            setTransform("examTagPosX", Math.round((initialSettings.examTagPosX || 0) + deltaX));
-            setTransform("examTagPosY", Math.round((initialSettings.examTagPosY || 0) + deltaY));
+            setTransform("examTagPosX", Math.round((Number.parseFloat(initialSettings.examTagPosX) || 0) + deltaX));
+            setTransform("examTagPosY", Math.round((Number.parseFloat(initialSettings.examTagPosY) || 0) + deltaY));
           } else if (type === "exam-resize-se" || type === "exam-resize-ne" || type === "exam-resize-sw" || type === "exam-resize-nw" || type === "exam-resize-e" || type === "exam-resize-w") {
             const scaleDelta = (type === "exam-resize-se" || type === "exam-resize-ne" || type === "exam-resize-e") ? deltaX : -deltaX;
             const newSize = Math.round(Math.max(10, Math.min(36, (initialSettings.examFontSize || 15) + (scaleDelta / 8))));
@@ -2215,13 +2553,13 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
 
 
           else if (type === "options-position") {
-            setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
-            setTransform("optionsPosY", Math.round((initialSettings.optionsPosY || 0) + deltaY));
+            setTransform("optionsPosX", Math.round((Number.parseFloat(initialSettings.optionsPosX) || 0) + deltaX));
+            setTransform("optionsPosY", Math.round((Number.parseFloat(initialSettings.optionsPosY) || 0) + deltaY));
           } else if (type === "options-resize-e") {
             setTransform("optionWidthPercent", clampW(initialSettings.optionWidthPercent || 96, deltaPercent));
           } else if (type === "options-resize-w") {
             setTransform("optionWidthPercent", clampW(initialSettings.optionWidthPercent || 96, -deltaPercent));
-            setTransform("optionsPosX", Math.round((initialSettings.optionsPosX || 0) + deltaX));
+            setTransform("optionsPosX", Math.round((Number.parseFloat(initialSettings.optionsPosX) || 0) + deltaX));
           }
 
           // Exact Proportional & Side Image Resizing (Pinned 1:1 to Mouse Cursor)
@@ -2355,33 +2693,31 @@ export function updateLiveCanvasSlide(app, state, saveState) {
   const ppt = state.ppt;
   const activeQ = ppt.questions[ppt.activeQuestionIndex] || {};
   const settings = getSlideSettings(ppt.settings, activeQ);
-  const isBlankSlide = (activeQ.layout === "blank");
+  const hasAnyActiveElement = Boolean(
+    settings.showHeader ||
+    settings.showQBadge ||
+    settings.showEnglish ||
+    settings.showHindi ||
+    settings.showDivider ||
+    settings.showExamTag ||
+    settings.showOptions ||
+    settings.showFooter
+  );
+  const isBlankSlide = (activeQ.layout === "blank") && !hasAnyActiveElement;
 
   canvasWrappers.forEach((canvasWrapper) => {
-    if (isBlankSlide) {
-      if (activeQ.settings && activeQ.settings.bgImage) {
-        let bgSize = "100% 100%";
-        if (activeQ.settings.bgFit === "cover") bgSize = "cover";
-        else if (activeQ.settings.bgFit === "contain") bgSize = "contain";
-        canvasWrapper.style.backgroundImage = `url("${activeQ.settings.bgImage}")`;
-        canvasWrapper.style.backgroundSize = bgSize;
-        canvasWrapper.style.backgroundPosition = "center";
-        canvasWrapper.style.backgroundRepeat = "no-repeat";
-      } else {
-        canvasWrapper.style.backgroundImage = "none";
-        canvasWrapper.style.background = (activeQ.settings && activeQ.settings.slideBg) || "#FFFFFF";
-      }
-    } else if (settings.bgImage) {
+    const bgImgUrl = activeQ.bgImage || (activeQ.settings && activeQ.settings.bgImage) || settings.bgImage;
+    if (bgImgUrl) {
       let bgSize = "100% 100%";
       if (settings.bgFit === "cover") bgSize = "cover";
       else if (settings.bgFit === "contain") bgSize = "contain";
-      canvasWrapper.style.backgroundImage = `url("${settings.bgImage}")`;
+      canvasWrapper.style.backgroundImage = `url("${bgImgUrl}")`;
       canvasWrapper.style.backgroundSize = bgSize;
       canvasWrapper.style.backgroundPosition = "center";
       canvasWrapper.style.backgroundRepeat = "no-repeat";
     } else {
       canvasWrapper.style.backgroundImage = "none";
-      canvasWrapper.style.background = settings.slideBg || "#FFFFFF";
+      canvasWrapper.style.background = (isBlankSlide && activeQ.settings && activeQ.settings.slideBg) || settings.slideBg || "#FFFFFF";
     }
 
 
@@ -2400,29 +2736,31 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // Top Header Bar
     const headerBar = canvasWrapper.querySelector(".slide-header-bar");
     if (headerBar) {
-      headerBar.style.display = (settings.showHeader !== false && !isBlankSlide) ? "flex" : "none";
+      headerBar.style.display = (settings.showHeader && !isBlankSlide) ? "flex" : "none";
       headerBar.style.background = settings.headerBg || "#7A0000";
       headerBar.style.height = `${settings.headerHeight || 64}px`;
     }
 
     const qBadgeBoxes = canvasWrapper.querySelectorAll(".slide-q-badge-box, .slide-standalone-q-badge-box");
     qBadgeBoxes.forEach((b) => {
-      b.style.transform = `translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px)`;
+      const qX = Number.parseFloat(settings.qBadgePosX) || 0;
+      const qY = Number.parseFloat(settings.qBadgePosY) || 0;
+      b.style.transform = `translate(${qX}px, ${qY}px)`;
     });
 
     const headerQBox = canvasWrapper.querySelector(".slide-q-badge-box");
     if (headerQBox) {
-      headerQBox.style.display = (settings.showQBadge !== false && settings.showHeader !== false && !isBlankSlide) ? "inline-flex" : "none";
+      headerQBox.style.display = (settings.showQBadge && settings.showHeader && !isBlankSlide) ? "inline-flex" : "none";
     }
 
     const standaloneQBox = canvasWrapper.querySelector(".slide-standalone-q-badge-box");
     if (standaloneQBox) {
-      standaloneQBox.style.display = (settings.showHeader === false && settings.showQBadge !== false && !isBlankSlide) ? "inline-flex" : "none";
+      standaloneQBox.style.display = (!settings.showHeader && settings.showQBadge) ? "inline-flex" : "none";
     }
 
     const qBadges = canvasWrapper.querySelectorAll(".slide-q-badge");
     qBadges.forEach((qBadge) => {
-      qBadge.style.display = (settings.showQBadge !== false) ? (settings.showHeader !== false ? "flex" : "inline-flex") : "none";
+      qBadge.style.display = settings.showQBadge ? (settings.showHeader ? "flex" : "inline-flex") : "none";
       qBadge.style.background = settings.qBadgeBg || "#FFFFFF";
       const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
       qBadge.style.color = settings.qBadgeColor || defaultQColor;
@@ -2435,7 +2773,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
 
     const examHeaderBox = canvasWrapper.querySelector(".slide-exam-header-box");
     if (examHeaderBox) {
-      examHeaderBox.style.display = (settings.showExamTag !== false && settings.examTagPosition === "header" && !isBlankSlide) ? "inline-flex" : "none";
+      examHeaderBox.style.display = (settings.showExamTag && settings.examTagPosition === "header" && !isBlankSlide) ? "inline-flex" : "none";
       examHeaderBox.style.transform = `translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px)`;
     }
 
@@ -2447,7 +2785,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
         if (activeQ.examHtml) {
           examTitle.innerHTML = activeQ.examHtml;
         } else {
-          examTitle.textContent = activeQ.exam || settings.defaultExam || "SSC CGL (Shift 1)";
+          examTitle.textContent = activeQ.exam || settings.defaultExam || "(Exam Name)";
         }
       }
     }
@@ -2473,8 +2811,12 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // Slide Body Area
     const bodyArea = canvasWrapper.querySelector(".slide-body-content");
     if (bodyArea) {
-      const posX = settings.boxPosX !== undefined ? settings.boxPosX : (settings.layoutPreset === "right-split" ? 42 : 0);
-      const boxW = settings.questionBoxWidth || (settings.layoutPreset === "right-split" || settings.layoutPreset === "left-split" ? 56 : 100);
+      const posX = settings.boxPosX && Number(settings.boxPosX) !== 0
+        ? Number(settings.boxPosX)
+        : (settings.layoutPreset === "right-split" ? 42 : 0);
+      const boxW = settings.questionBoxWidth && Number(settings.questionBoxWidth) !== 100
+        ? Number(settings.questionBoxWidth)
+        : (settings.layoutPreset === "right-split" || settings.layoutPreset === "left-split" ? 56 : 100);
       bodyArea.style.transform = `translate(${posX}%, ${settings.boxPosY || 0}px)`;
       bodyArea.style.width = `${boxW}%`;
       bodyArea.style.padding = `${settings.questionPadding || 16}px 24px`;
@@ -2483,7 +2825,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // English Text Section with Transform & Width
     const engSection = canvasWrapper.querySelector(".slide-eng-section");
     if (engSection) {
-      engSection.style.display = (settings.showEnglish !== false) ? "block" : "none";
+      engSection.style.display = settings.showEnglish ? "flex" : "none";
       engSection.style.transform = `translate(${settings.engPosX || 0}px, ${settings.engPosY || 0}px)`;
       engSection.style.width = settings.engWidth ? `${settings.engWidth}%` : "100%";
     }
@@ -2498,7 +2840,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
         if (activeQ.englishHtml) {
           engText.innerHTML = activeQ.englishHtml;
         } else {
-          engText.textContent = activeQ.english || "English question will appear here...";
+          engText.textContent = activeQ.english || "";
         }
       }
     }
@@ -2506,7 +2848,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // Divider Line Wrapper with Width & Transform
     const dividerWrapper = canvasWrapper.querySelector(".slide-divider-wrapper");
     if (dividerWrapper) {
-      dividerWrapper.style.display = (settings.showDivider !== false && !isBlankSlide) ? "block" : "none";
+      dividerWrapper.style.display = (settings.showDivider && !isBlankSlide) ? "block" : "none";
       dividerWrapper.style.width = settings.dividerWidth ? `${settings.dividerWidth}%` : "100%";
       dividerWrapper.style.transform = `translate(${settings.dividerPosX || 0}px, ${settings.dividerPosY || 0}px)`;
       dividerWrapper.style.margin = `${settings.dividerSpacing || 6}px 0`;
@@ -2519,7 +2861,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // Hindi Text Section with Transform & Width
     const hindiSection = canvasWrapper.querySelector(".slide-hindi-section");
     if (hindiSection) {
-      hindiSection.style.display = (settings.showHindi !== false) ? "block" : "none";
+      hindiSection.style.display = settings.showHindi ? "flex" : "none";
       hindiSection.style.transform = `translate(${settings.hindiPosX || 0}px, ${settings.hindiPosY || 0}px)`;
       hindiSection.style.width = settings.hindiWidth ? `${settings.hindiWidth}%` : "100%";
     }
@@ -2534,7 +2876,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
         if (activeQ.hindiHtml) {
           hindiText.innerHTML = activeQ.hindiHtml;
         } else {
-          hindiText.textContent = activeQ.hindi || "हिंदी प्रश्न यहाँ दिखाई देगा...";
+          hindiText.textContent = activeQ.hindi || "";
         }
       }
     }
@@ -2543,7 +2885,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     const examSection = canvasWrapper.querySelector(".slide-exam-section");
     if (examSection) {
       const isBelowQ = (settings.examTagPosition === "below-question" || settings.examTagPosition === "above-options") && !isBlankSlide;
-      examSection.style.display = (settings.showExamTag !== false && isBelowQ) ? "inline-block" : "none";
+      examSection.style.display = (settings.showExamTag && isBelowQ) ? "inline-flex" : "none";
       examSection.style.transform = `translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px)`;
       const tagEl = examSection.querySelector(".slide-standalone-exam-tag");
       if (tagEl) {
@@ -2561,7 +2903,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
           if (activeQ.examHtml) {
             tagEl.innerHTML = activeQ.examHtml;
           } else {
-            tagEl.textContent = activeQ.exam || settings.defaultExam || "(SSC GD 22 Feb., 2024 Shift III)";
+            tagEl.textContent = activeQ.exam || settings.defaultExam || "(Exam Name)";
           }
         }
       }
@@ -2571,7 +2913,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     // Options Container & Boundaries with Transform
     const optContainer = canvasWrapper.querySelector(".slide-options-container");
     if (optContainer) {
-      optContainer.style.display = (settings.showOptions !== false && !isBlankSlide) ? "grid" : "none";
+      optContainer.style.display = (settings.showOptions && !isBlankSlide) ? "grid" : "none";
       optContainer.setAttribute("data-layout", settings.optionsLayout || "2-col");
       optContainer.setAttribute("data-option-style", settings.optionStyle || "card");
       optContainer.style.width = `${settings.optionWidthPercent || 96}%`;
@@ -2703,6 +3045,7 @@ export function attachImageToActiveSlide(dataUrl, app, state, recordUndo, saveSt
     activeQ.images.push({
       id: `img_${Date.now()}_${newImgIndex}`,
       dataUrl: dataUrl,
+      originalDataUrl: dataUrl,
       posX: offset,
       posY: offset,
       width: initialW,
@@ -2721,6 +3064,7 @@ export function attachImageToActiveSlide(dataUrl, app, state, recordUndo, saveSt
     activeQ.images.push({
       id: `img_${Date.now()}_1`,
       dataUrl: dataUrl,
+      originalDataUrl: dataUrl,
       posX: 20,
       posY: 20,
       width: 360,
@@ -2813,7 +3157,7 @@ export function initSlideImageDragAndDrop(app, state, recordUndo, saveState, ren
         e.preventDefault();
         e.stopPropagation();
         container.classList.remove("ppt-image-dragover");
-        await processUploadedPptFile(docxFiles[0], app, state, recordUndo, render);
+        await processUploadedPptFile(docxFiles[0], app, state, recordUndo, render, saveState);
         return;
       }
     });
@@ -2944,19 +3288,23 @@ export function handlePptSlideNavKeydown(event, state, recordUndo, render, saveS
   if (isCtrlOrCmd && !isAlt) {
     if (key === "=" || key === "+" || key === "Add") {
       event.preventDefault();
-      ppt.fsZoom = Math.min(200, (ppt.fsZoom || 100) + 10);
+      ppt.fsAutoFit = false;
+      ppt.fsZoom = Math.min(200, (ppt.fsZoom || 100) + 5);
       if (saveState) saveState(state);
       if (render) render();
       return;
     } else if (key === "-" || key === "_" || key === "Subtract") {
       event.preventDefault();
-      ppt.fsZoom = Math.max(50, (ppt.fsZoom || 100) - 10);
+      ppt.fsAutoFit = false;
+      ppt.fsZoom = Math.max(25, (ppt.fsZoom || 100) - 5);
       if (saveState) saveState(state);
       if (render) render();
       return;
     } else if (key === "0") {
       event.preventDefault();
-      ppt.fsZoom = 100;
+      ppt.fsAutoFit = true;
+      const overlay = (typeof document !== "undefined") ? document.querySelector(".ppt-fullscreen-app-overlay") : null;
+      ppt.fsZoom = calculateAutoFitZoom(overlay);
       if (saveState) saveState(state);
       if (render) render();
       return;
@@ -2994,7 +3342,7 @@ export function handlePptSlideNavKeydown(event, state, recordUndo, render, saveS
       if (recordUndo) recordUndo();
       const newSlide = {
         number: `Q.${ppt.questions.length + 1}`,
-        exam: ppt.settings?.defaultExam || "SSC GD 2026",
+        exam: ppt.settings?.defaultExam || "(Exam Name)",
         topic: ppt.settings?.topic || "MATHEMATICS",
         english: "New Question English Statement...",
         hindi: "नया प्रश्न हिंदी विवरण...",

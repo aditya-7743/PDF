@@ -4,8 +4,39 @@ export async function parseDocxFile(file) {
     await loadMammothScript();
   }
   const arrayBuffer = await file.arrayBuffer();
-  const result = await window.mammoth.extractRawText({ arrayBuffer });
-  const rawText = result.value || "";
+  let rawText = "";
+
+  // 1. Convert to HTML first to preserve paragraph breaks, tables, and soft line breaks (<br>)
+  try {
+    const htmlResult = await window.mammoth.convertToHtml({ arrayBuffer });
+    if (htmlResult && htmlResult.value) {
+      let html = htmlResult.value;
+      html = html.replace(/<br\s*[\/]?>/gi, "\n");
+      html = html.replace(/<\/p>/gi, "\n\n");
+      html = html.replace(/<\/li>/gi, "\n");
+      html = html.replace(/<\/tr>/gi, "\n");
+      html = html.replace(/<\/td>/gi, "\t");
+      html = html.replace(/<\/h[1-6]>/gi, "\n\n");
+      html = html.replace(/<[^>]+>/g, ""); // strip remaining HTML tags
+      
+      if (typeof document !== "undefined") {
+        const txt = document.createElement("textarea");
+        txt.innerHTML = html;
+        rawText = txt.value;
+      } else {
+        rawText = html.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      }
+    }
+  } catch (e) {
+    console.warn("mammoth convertToHtml fallback:", e);
+  }
+
+  // 2. Fallback to extractRawText if HTML was empty
+  if (!rawText || !rawText.trim()) {
+    const textResult = await window.mammoth.extractRawText({ arrayBuffer });
+    rawText = textResult.value || "";
+  }
+
   return parseQuestionsText(rawText);
 }
 
@@ -24,30 +55,50 @@ export function parseQuestionsText(rawText, defaultTopic) {
   if (!defaultTopic) defaultTopic = "TOPIC";
   if (!rawText || !rawText.trim()) return [];
 
-  const text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   let globalTopic = defaultTopic;
 
   const topLines = text.split("\n").slice(0, 5);
   for (let i = 0; i < topLines.length; i++) {
     const line = topLines[i];
-    const tMatch = line.match(/^\s*\[?(?:TOPIC|CHAPTER)\]?\s*:\s*(.+)$/i);
+    const tMatch = line.match(/^\s*\[?(?:TOPIC|CHAPTER)\]?\s*:\s*([^\n\]]+)/i);
     if (tMatch) {
-      globalTopic = tMatch[1].trim();
+      globalTopic = tMatch[1].replace(/\]$/, "").trim();
       break;
     }
   }
 
-  // Strictly match Question boundaries at beginning of lines
-  const qRegex = /(?:^|\n)\s*(?:Q(?:uestion|ue)?\.?\s*(?:No\.?|Number)?\s*[:\.\-]?\s*(\d+)|प्रश्न\s*(?:संख्या)?\s*[:\.\-]?\s*(\d+)|(\d+)[\.\)\:\-])(?=[\s\.\:\-\)\]]|$)/gi;
-  const qMatches = [];
+  // Pre-process: Ensure explicit question markers start on a new line if merged with previous line
+  text = text.replace(/([^\n])\s*(Q(?:uestion|ue)?\.?\s*(?:No\.?|Number)?\s*[:\.\-]?\s*\d+|प्रश्न\s*(?:संख्या|सं\.?)?\s*[:\.\-]?\s*\d+|प्र\.?\s*[:\.\-]?\s*\d+)/gi, "$1\n$2");
+
+  // Pre-process: Ensure bracketed options have a newline before them if merged with previous text
+  text = text.replace(/([^\n\s])\s*(\[[A-Ea-e][\]\.]|\([A-Ea-e][\)\.]|[【［][A-Ea-e][】］])/g, "$1\n$2");
+
+  // Pre-process: If question number is immediately followed by text (e.g. Q.No. 19A sum of money...), add a space
+  text = text.replace(/(Q(?:uestion|ue)?\.?\s*(?:No\.?|Number)?\s*[:\.\-]?\s*\d+)([A-Za-z])/gi, "$1 $2");
+
+  // 1. First search for explicit Question markers (Q.1, Q 1, Question 1, Que 1, प्रश्न 1, प्र. 1)
+  const explicitQRegex = /(?:^|\n)\s*(?:Q(?:uestion|ue)?\.?\s*(?:No\.?|Number)?\s*[:\.\-]?\s*(\d+)|प्रश्न\s*(?:संख्या|सं\.?)?\s*[:\.\-]?\s*(\d+)|प्र\.?\s*[:\.\-]?\s*(\d+))(?=[^\d]|$)/gi;
+  let qMatches = [];
   let match;
 
-  while ((match = qRegex.exec(text)) !== null) {
+  while ((match = explicitQRegex.exec(text)) !== null) {
     const qNum = match[1] || match[2] || match[3];
     qMatches.push({
       index: match.index,
       qNum: parseInt(qNum, 10)
     });
+  }
+
+  // 2. If no explicit Q markers found, fallback to sequential plain number markers (1. / 2. / 3.)
+  if (qMatches.length === 0) {
+    const plainNumRegex = /(?:^|\n)\s*(\d+)[\.\)\:\-](?=[\s\.\:\-\)\]]|$)/g;
+    while ((match = plainNumRegex.exec(text)) !== null) {
+      qMatches.push({
+        index: match.index,
+        qNum: parseInt(match[1], 10)
+      });
+    }
   }
 
   if (qMatches.length === 0) {
@@ -83,10 +134,10 @@ function parseSingleQuestionChunk(chunk, fallbackIndex, globalTopic) {
   text = text.replace(/^\s*(?:Q(?:uestion|ue)?\.?\s*(?:No\.?|Number)?\s*[:\.\-]?\s*\d+|प्रश्न\s*(?:संख्या)?\s*[:\.\-]?\s*\d+|\d+[\.\)\:\-])[\s\.\:\-\)\]]*/i, "").trim();
 
   // 1. Topic
-  const topicMatch = text.match(/\[?(?:TOPIC|CHAPTER)\]?\s*:\s*([^\n]+)/i);
+  const topicMatch = text.match(/\[?(?:TOPIC|CHAPTER)\]?\s*:\s*([^\n\]]+)/i);
   if (topicMatch) {
-    topic = topicMatch[1].trim();
-    text = text.replace(topicMatch[0], "").trim();
+    topic = topicMatch[1].replace(/\]$/, "").trim();
+    text = text.replace(/\[?(?:TOPIC|CHAPTER)\]?\s*:\s*[^\n]+/i, "").trim();
   }
 
   // 2. Extract Answer Key if present in chunk
@@ -111,13 +162,13 @@ function parseSingleQuestionChunk(chunk, fallbackIndex, globalTopic) {
 
   text = remainingLines.join("\n");
 
-  // 4. Extract Options ([A], (A), [A]., (A)., or A. at start of line - avoids matching ratios like A: B = 7:5)
-  const optRegex = /(?:^|\n|\s)(?:\[([A-Ea-e])\]|\(([A-Ea-e])\)|(?:\n|^)\s*([A-Ea-e])[\.\)\:\-]|(?:\s{2,}|\t)([A-Ea-e])[\.\)\-])\s*/g;
+  // 4. Extract Options ([A], (A), [A]., (A)., [A.], (A.), 【A】, ［A］, or A. at start of line)
+  const optRegex = /(?:\[([A-Ea-e])[\.\]\)]|\(([A-Ea-e])[\.\)]|[【［]([A-Ea-e])[】］]|(?:^|\n|\s)\s*([A-Ea-e])[\.\)\:\-]|(?:\s{2,}|\t)([A-Ea-e])[\.\)\-])\s*/g;
   const optMatches = [];
   let oMatch;
 
   while ((oMatch = optRegex.exec(text)) !== null) {
-    const key = (oMatch[1] || oMatch[2] || oMatch[3] || oMatch[4]).toUpperCase();
+    const key = (oMatch[1] || oMatch[2] || oMatch[3] || oMatch[4] || oMatch[5]).toUpperCase();
     optMatches.push({
       key: key,
       start: oMatch.index,
@@ -135,11 +186,11 @@ function parseSingleQuestionChunk(chunk, fallbackIndex, globalTopic) {
       const nextOptStart = (i + 1 < optMatches.length) ? optMatches[i + 1].start : text.length;
       let optVal = text.slice(curOpt.start + curOpt.matchLen, nextOptStart).trim();
 
-      // Check if Answer is appended to Option (e.g. Option D has "36π-72 Answer : A")
+      // Check if Answer is appended to Option (e.g. Option D has "15 years Answer : A")
       const optAnsMatch = optVal.match(/(?:Ans|Answer|Correct(?:\s*Option|\s*Ans)?)\s*[\:\.\-]?\s*\[?\(?([A-Ea-e])[\)\]]?/i);
       if (optAnsMatch) {
         if (!answerKey) answerKey = optAnsMatch[1].toUpperCase();
-        optVal = optVal.replace(optAnsMatch[0], "").trim();
+        optVal = optVal.slice(0, optAnsMatch.index).trim();
       }
 
       // Clean leading dots, dashes, colons from option value
@@ -165,7 +216,7 @@ function parseSingleQuestionChunk(chunk, fallbackIndex, globalTopic) {
     id: "q_" + fallbackIndex + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
     number: qNumber,
     topic: topic || globalTopic || "TOPIC",
-    exam: examTag || "SSC CGL (Shift 1)",
+    exam: examTag || "",
     english: parts.english.trim(),
     hindi: parts.hindi.trim(),
     options: options,

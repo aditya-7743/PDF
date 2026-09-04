@@ -22,15 +22,15 @@ export function renderStatusBar(state) {
         <!-- Zoom Slider -->
         <div class="ppt-fs-zoom-controls">
           <button class="ppt-fs-status-btn" data-action="ppt-fs-zoom-dec" title="Zoom Out (−)">−</button>
-          <input type="range" min="50" max="150" step="5" value="${zoomLevel}" data-ppt-fs-zoom class="ppt-fs-zoom-slider" title="Slide Zoom (${zoomLevel}%)" />
+          <input type="range" min="25" max="150" step="5" value="${zoomLevel}" data-ppt-fs-zoom class="ppt-fs-zoom-slider" title="Slide Zoom (${zoomLevel}%)" />
           <span class="ppt-fs-zoom-label">${zoomLevel}%</span>
           <button class="ppt-fs-status-btn" data-action="ppt-fs-zoom-inc" title="Zoom In (+)">+</button>
-          <button class="ppt-fs-status-btn" data-action="ppt-fs-zoom-reset" title="Fit to Window">Fit</button>
+          <button class="ppt-fs-status-btn ${ppt.fsAutoFit !== false ? 'is-active' : ''}" data-action="ppt-fs-zoom-reset" title="Fit to Window">Fit</button>
         </div>
 
-        <!-- Exit Full Screen -->
-        <button class="ppt-fs-exit-btn" data-action="ppt-close-fullscreen" title="Exit Full Screen Mode (Esc)">
-          ✕ Exit Full Screen
+        <!-- Back to Home -->
+        <button class="ppt-fs-exit-btn" data-action="switch-mode" data-mode="home" title="Back to Home Dashboard">
+          🏠 Home
         </button>
       </div>
     </footer>

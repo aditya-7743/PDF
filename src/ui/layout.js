@@ -3,15 +3,19 @@ import { getSlideSettings } from "../branches/pptBranch.js";
 import { renderMathMl } from "../core/mathml.js";
 import { getEquationDiagnostics } from "../core/normalizer.js";
 import { renderPptBuilderWorkbench, getQuestionImages } from "../branches/ppt/pptUI.js";
+import { renderHomeWorkbench } from "../branches/home/homeUI.js";
 
 export { getQuestionImages };
 
 export function renderApp(state) {
   const rendered = renderMathMl(state.input);
   const diagnostics = getEquationDiagnostics(state.input);
+  const mode = normalizeAppMode(state.mode);
+  const showTopbar = mode !== "home" && mode !== "ppt-builder";
+
   return `
-    <div class="app-shell">
-      ${renderTopbar(state)}
+    <div class="app-shell${mode === "home" ? " is-home-shell" : ""}${mode === "ppt-builder" ? " is-ppt-shell" : ""}">
+      ${showTopbar ? renderTopbar(state) : ""}
       ${renderWorkbench(state, rendered, diagnostics)}
     </div>
   `;
@@ -22,6 +26,7 @@ function renderTopbar(state) {
   return `
     <header class="topbar">
       <div class="mode-switch" role="tablist" aria-label="Workspace mode">
+        <button class="mode-button${mode === "home" ? " is-active" : ""}" data-action="switch-mode" data-mode="home" data-set-mode="home" type="button">🏠 Home</button>
         <button class="mode-button${mode === "equation" ? " is-active" : ""}" data-action="switch-mode" data-mode="equation" data-set-mode="equation" type="button">Equation Editor</button>
         <button class="mode-button${mode === "math-figures" ? " is-active" : ""}" data-action="switch-mode" data-mode="math-figures" data-set-mode="math-figures" type="button">Math Figures</button>
         <button class="mode-button${mode === "image-tools" ? " is-active" : ""}" data-action="switch-mode" data-mode="image-tools" data-set-mode="image-tools" type="button">Image Tools</button>
@@ -33,6 +38,9 @@ function renderTopbar(state) {
 
 function renderWorkbench(state, rendered, diagnostics) {
   const mode = normalizeAppMode(state.mode);
+  if (mode === "home") {
+    return renderHomeWorkbench(state);
+  }
   if (mode === "image-tools") {
     return renderImageToolsWorkbench(state);
   }
@@ -405,8 +413,8 @@ function normalizeImageToolMode(value) {
 }
 
 function normalizeAppMode(value) {
-  if (value === "math-figures" || value === "image-tools" || value === "ppt-builder") return value;
-  return "equation";
+  if (value === "equation" || value === "math-figures" || value === "image-tools" || value === "ppt-builder") return value;
+  return "home";
 }
 
 function isDrawingMode(value) {
