@@ -48,9 +48,9 @@ function loadImage(url) {
 }
 
 function resolvePageSize(image, options, rotation = 0) {
-  const pageSize = options.pageSize || "a4";
+  const pageSize = options.pageSize || "dynamic";
   const imageSize = getRotatedImageSize(image, rotation);
-  if (pageSize === "image") {
+  if (pageSize === "dynamic" || pageSize === "image") {
     const ratio = imageSize.width / Math.max(1, imageSize.height);
     const longEdge = 841.89;
     if (ratio >= 1) {
@@ -82,11 +82,27 @@ function renderImagePage(image, page, options, rotation = 0) {
 
   const marginPoints = Math.max(0, Number(options.marginMm || 0)) * MM_TO_POINTS;
   const margin = Math.min(Math.round(marginPoints * scale), Math.floor(Math.min(canvas.width, canvas.height) * 0.42));
+  let marginX = margin;
+  let marginY = margin;
+  const isDynamicPage = (options.pageSize === "dynamic" || options.pageSize === "image");
+  if (isDynamicPage && margin > 0) {
+    const imageSize = getRotatedImageSize(image, rotation);
+    const imgRatio = imageSize.width / Math.max(1, imageSize.height);
+    if (imgRatio >= 1) {
+      marginY = margin;
+      marginX = Math.round(margin * imgRatio);
+    } else {
+      marginX = margin;
+      marginY = Math.round(margin / imgRatio);
+    }
+    marginX = Math.min(marginX, Math.floor(canvas.width * 0.42));
+    marginY = Math.min(marginY, Math.floor(canvas.height * 0.42));
+  }
   const box = {
-    x: margin,
-    y: margin,
-    width: Math.max(1, canvas.width - margin * 2),
-    height: Math.max(1, canvas.height - margin * 2),
+    x: marginX,
+    y: marginY,
+    width: Math.max(1, canvas.width - marginX * 2),
+    height: Math.max(1, canvas.height - marginY * 2),
   };
 
   const fit = options.fit || "contain";

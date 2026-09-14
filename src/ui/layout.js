@@ -190,9 +190,9 @@ function renderImagePdfPanel() {
               <label class="image-pdf-field">
                 <span>Page</span>
                 <select data-image-pdf-option="pageSize">
+                  <option value="dynamic" selected>Dynamic (Image Size)</option>
                   <option value="a4">A4</option>
                   <option value="letter">Letter</option>
-                  <option value="image">Image Size</option>
                   <option value="square">Square</option>
                 </select>
               </label>
@@ -214,7 +214,7 @@ function renderImagePdfPanel() {
               </label>
               <label class="image-pdf-field">
                 <span>Margin</span>
-                <input data-image-pdf-option="marginMm" type="number" min="0" max="40" step="1" value="8" />
+                <input data-image-pdf-option="marginMm" type="number" min="0" max="40" step="1" value="0" />
               </label>
               <label class="image-pdf-field">
                 <span>Paper</span>

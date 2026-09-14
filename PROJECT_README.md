@@ -40,6 +40,14 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-09-14 - Default Dynamic Page Size in Image to PDF
+
+- **Dynamic Aspect Ratio by Default for Image to PDF**:
+  - Set **`Dynamic (Image Size)`** as the default selected option in the Page dropdown (`src/ui/layout.js`, `src/branches/imagePdf/imagePdfController.js`).
+  - In dynamic mode, each PDF page dynamically conforms to the exact aspect ratio and dimensions of each image with 0% distortion.
+  - Set default margin to `0 mm` so images fill each page seamlessly without unnecessary white borders, and ensured proportional margin scaling if user specifies custom margins.
+  - Bumped settings version key to `:v2` and cache version in `index.html` to `v231-default-dynamic-page-size`.
+
 ### 2026-09-14 - Added Reverse Order Button in Image Tools
 
 - **Added Reverse Image Queue Order Feature**:

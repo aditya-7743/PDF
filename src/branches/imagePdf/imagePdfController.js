@@ -9,7 +9,7 @@ const IMAGE_PDF_COMPRESSION_PRESETS = {
   balanced: { quality: 92, label: "Balanced" },
   small: { quality: 72, label: "Small size" },
 };
-const IMAGE_PDF_SETTINGS_KEY = "math-original-form-builder:image-pdf-settings:v1";
+const IMAGE_PDF_SETTINGS_KEY = "math-original-form-builder:image-pdf-settings:v2";
 const DEFAULT_IMAGE_PDF_PART_NAME_PATTERN = "{name} part {n}";
 const IMAGE_PDF_CANCELLED_MESSAGE = "Operation cancelled.";
 
@@ -714,6 +714,10 @@ function applySavedImagePdfSettings(root) {
     }
     if (Object.prototype.hasOwnProperty.call(settings, key)) {
       node.value = settings[key];
+    } else if (key === "pageSize") {
+      node.value = "dynamic";
+    } else if (key === "marginMm") {
+      node.value = "0";
     } else if (key === "partNamePattern") {
       node.value = DEFAULT_IMAGE_PDF_PART_NAME_PATTERN;
     }
@@ -885,10 +889,10 @@ function readImagePdfOptions() {
   const root = app.querySelector("[data-image-pdf-tool]");
   const read = (key, fallback = "") => root?.querySelector(`[data-image-pdf-option="${key}"]`)?.value || fallback;
   return {
-    pageSize: read("pageSize", "a4"),
+    pageSize: read("pageSize", "dynamic"),
     orientation: read("orientation", "auto"),
     fit: read("fit", "contain"),
-    marginMm: clamp(Number(read("marginMm", 8)), 0, 40),
+    marginMm: clamp(Number(read("marginMm", 0)), 0, 40),
     compressionMode: read("compressionMode", "balanced"),
     quality: clamp(Number(read("quality", 92)), 60, 100),
     background: read("background", "#ffffff"),
