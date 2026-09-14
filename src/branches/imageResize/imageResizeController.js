@@ -30,6 +30,7 @@ function bindImageResizeEvents() {
   const dropzone = root.querySelector("[data-image-resize-dropzone]");
   const addButtons = root.querySelectorAll("[data-image-resize-add]");
   const clearButtons = root.querySelectorAll("[data-image-resize-clear]");
+  const reverseButton = root.querySelector("[data-image-resize-reverse]");
   const list = root.querySelector("[data-image-resize-list]");
   let dragDepth = 0;
 
@@ -56,6 +57,7 @@ function bindImageResizeEvents() {
     fileInput?.click();
   });
 
+  reverseButton?.addEventListener("click", reverseImageResizeQueue);
   clearButtons.forEach((button) => button.addEventListener("click", clearImageResizeItems));
 
   root.addEventListener("dragenter", (event) => {
@@ -234,6 +236,19 @@ function clearImageResizeItems() {
   renderImageResizeQueue();
   updateImageResizeWorkspace();
   setImageResizeStatus("");
+}
+
+
+function reverseImageResizeQueue() {
+  if (imageResizeItems.length < 2) {
+    setImageResizeStatus("Add at least 2 images to reverse order.");
+    return;
+  }
+
+  imageResizeItems.reverse();
+  renderImageResizeQueue();
+  updateImageResizeWorkspace();
+  setImageResizeStatus(`${imageResizeItems.length} images reversed.`);
 }
 
 

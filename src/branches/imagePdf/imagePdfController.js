@@ -54,6 +54,7 @@ function bindImagePdfEvents() {
   const pasteButtons = root.querySelectorAll("[data-image-pdf-paste]");
   const clearButtons = root.querySelectorAll("[data-image-pdf-clear]");
   const convertButton = root.querySelector("[data-image-pdf-convert]");
+  const reverseButton = root.querySelector("[data-image-pdf-reverse]");
   const shuffleButton = root.querySelector("[data-image-pdf-shuffle]");
   const viewSelect = root.querySelector("[data-image-pdf-view]");
   const queue = root.querySelector("[data-image-pdf-list]");
@@ -95,6 +96,7 @@ function bindImagePdfEvents() {
 
   clearButtons.forEach((button) => button.addEventListener("click", clearImagePdfItems));
   convertButton?.addEventListener("click", exportImagePdf);
+  reverseButton?.addEventListener("click", reverseImagePdfQueue);
   shuffleButton?.addEventListener("click", shuffleImagePdfQueue);
 
   root.addEventListener("dragenter", (event) => {
@@ -578,6 +580,18 @@ function moveImagePdfItem(draggedId, targetId, position) {
   imagePdfItems.splice(toIndex, 0, item);
 
   return toIndex === fromIndex ? null : item;
+}
+
+
+function reverseImagePdfQueue() {
+  if (imagePdfItems.length < 2) {
+    setImagePdfStatus("Add at least 2 images to reverse order.");
+    return;
+  }
+
+  imagePdfItems.reverse();
+  renderImagePdfQueue();
+  setImagePdfStatus(`${imagePdfItems.length} images reversed.`);
 }
 
 

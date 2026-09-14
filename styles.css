@@ -263,6 +263,7 @@ button.active {
 
 .image-pdf-primary,
 .image-pdf-secondary,
+.image-pdf-reverse-button,
 .image-pdf-shuffle-button,
 .image-pdf-remove-all-button,
 .image-pdf-add-inline {
@@ -285,6 +286,7 @@ button.active {
 }
 
 .image-pdf-secondary,
+.image-pdf-reverse-button,
 .image-pdf-shuffle-button,
 .image-pdf-remove-all-button,
 .image-pdf-add-inline {
@@ -292,11 +294,13 @@ button.active {
   color: #314255;
 }
 
+.image-pdf-reverse-button,
 .image-pdf-shuffle-button {
   border-color: rgba(15, 143, 167, 0.38);
   color: var(--accent);
 }
 
+.image-pdf-reverse-button:hover,
 .image-pdf-shuffle-button:hover {
   background: rgba(232, 250, 248, 0.92);
 }

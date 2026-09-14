@@ -163,6 +163,7 @@ function renderImagePdfPanel() {
             <div class="image-pdf-queue-head">
               <span data-image-pdf-count>0 images</span>
               <div class="image-pdf-queue-actions">
+                <button class="image-pdf-reverse-button" data-image-pdf-reverse type="button" title="Reverse order (first becomes last, last becomes first)">Reverse</button>
                 <button class="image-pdf-shuffle-button" data-image-pdf-shuffle type="button" title="Randomly shuffle images">Shuffle</button>
                 <button class="image-pdf-remove-all-button" data-image-pdf-clear type="button" title="Remove all images">Remove All</button>
                 <label class="image-pdf-view-control">
@@ -318,7 +319,8 @@ function renderImageResizePanel() {
             <div class="image-resize-queue-head">
               <span data-image-resize-count>0 images</span>
               <div class="image-resize-queue-actions">
-                <button class="image-pdf-remove-all-button" data-image-resize-clear type="button">Remove All</button>
+                <button class="image-pdf-reverse-button" data-image-resize-reverse type="button" title="Reverse order (first becomes last, last becomes first)">Reverse</button>
+                <button class="image-pdf-remove-all-button" data-image-resize-clear type="button" title="Remove all images">Remove All</button>
                 <button class="image-pdf-add-inline" data-image-resize-add type="button">Add More</button>
               </div>
             </div>

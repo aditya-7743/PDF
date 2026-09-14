@@ -40,6 +40,14 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-09-14 - Added Reverse Order Button in Image Tools
+
+- **Added Reverse Image Queue Order Feature**:
+  - Added a dedicated **Reverse** button next to the **Shuffle** and **Remove All** buttons in the queue header (`Image to PDF` and `Image resize`).
+  - Clicking **Reverse** inverts the order of all loaded images (1st image becomes last, 2nd becomes second-to-last, etc., and last image becomes 1st).
+  - Automatically recalculates thumbnail numbering, reorder buttons, parts estimate, and status messages.
+  - Bumped cache version in `index.html` to `v230-add-image-reverse-order`.
+
 ### 2026-09-14 - Fixed Image Tools Browse and Add More Buttons
 
 - **Resolved Runtime Exception in Image Controllers**:
