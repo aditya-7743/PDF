@@ -1,4 +1,21 @@
 // Image Resize Branch Controller
+import {
+  hasImagePdfDraggedFiles,
+  normalizeImagePdfFiles,
+  createImagePdfFileSignature,
+  createImagePdfId,
+  readImagePdfDimensions,
+  waitForImagePdfDownloadQueue,
+  sanitizePdfFilename,
+  clamp,
+  escapeHtml,
+  downloadBlob
+} from "../imagePdf/imagePdfController.js";
+
+const IMAGE_RESIZE_SETTINGS_KEY = "math-original-form-builder:image-resize-settings:v1";
+const IMAGE_RESIZE_MAX_DIMENSION = 12000;
+const IMAGE_RESIZE_MAX_PIXELS = 100000000;
+
 let imageResizeItems = [];
 
 let imageResizeSelectedId = "";
@@ -23,7 +40,8 @@ function bindImageResizeEvents() {
     event.currentTarget.value = "";
   });
 
-  addButtons.forEach((button) => button.addEventListener("click", () => {
+  addButtons.forEach((button) => button.addEventListener("click", (e) => {
+    e.stopPropagation();
     fileInput?.click();
   }));
 

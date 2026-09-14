@@ -40,6 +40,14 @@ http://127.0.0.1:8765/
 
 ## Change Log
 
+### 2026-09-14 - Fixed Image Tools Browse and Add More Buttons
+
+- **Resolved Runtime Exception in Image Controllers**:
+  - Restored missing constants (`IMAGE_PDF_SETTINGS_KEY`, `DEFAULT_IMAGE_PDF_PART_NAME_PATTERN`, `IMAGE_PDF_CANCELLED_MESSAGE`, `IMAGE_PDF_VIEW_MODES`, `IMAGE_PDF_DRAG_TYPE`, `IMAGE_PDF_COMPRESSION_PRESETS`) and shared helper functions (`clamp`, `escapeHtml`, `downloadBlob`) in `src/branches/imagePdf/imagePdfController.js`. Previously, `applySavedImagePdfSettings` crashed immediately on evaluating `DEFAULT_IMAGE_PDF_PART_NAME_PATTERN`, halting event listener attachment for Browse, Add More, and file inputs.
+  - Exported shared utility functions from `imagePdfController.js` and imported them into `src/branches/imageResize/imageResizeController.js`, along with resize-specific constants (`IMAGE_RESIZE_SETTINGS_KEY`, `IMAGE_RESIZE_MAX_DIMENSION`, `IMAGE_RESIZE_MAX_PIXELS`).
+  - Added `e.stopPropagation()` to Browse and Add More click handlers to prevent dropzone bubble conflicts.
+  - Bumped cache version in `index.html` to `v229-fix-image-browse-and-add-more`.
+
 ### 2026-09-03 - Fixed Drag Disappear & Layout Jumping Bug
 
 - **Fixed Q.No and Canvas Element Disappearing on Drag/Move**:

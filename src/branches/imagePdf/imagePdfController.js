@@ -2,6 +2,41 @@
 import { createImagePdfBlob } from "../../core/imagePdf.js?v=gemini-paste-clean-20260705";
 
 
+const IMAGE_PDF_VIEW_MODES = ["extra-large", "large", "medium", "small", "list", "details", "tiles", "content"];
+const IMAGE_PDF_DRAG_TYPE = "application/x-image-pdf-item-id";
+const IMAGE_PDF_COMPRESSION_PRESETS = {
+  high: { quality: 96, label: "High quality" },
+  balanced: { quality: 92, label: "Balanced" },
+  small: { quality: 72, label: "Small size" },
+};
+const IMAGE_PDF_SETTINGS_KEY = "math-original-form-builder:image-pdf-settings:v1";
+const DEFAULT_IMAGE_PDF_PART_NAME_PATTERN = "{name} part {n}";
+const IMAGE_PDF_CANCELLED_MESSAGE = "Operation cancelled.";
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 let imagePdfItems = [];
 let imagePdfViewMode = "large";
 let imagePdfDraggingId = "";
@@ -40,7 +75,8 @@ function bindImagePdfEvents() {
     event.currentTarget.value = "";
   });
 
-  addButtons.forEach((button) => button.addEventListener("click", () => {
+  addButtons.forEach((button) => button.addEventListener("click", (e) => {
+    e.stopPropagation();
     fileInput?.click();
   }));
 
@@ -1272,5 +1308,16 @@ export {
   handleImagePdfPaste,
   handleImagePdfLightboxKeydown,
   extractImagePdfClipboardFiles,
-  imagePdfItems
+  imagePdfItems,
+  hasImagePdfDraggedFiles,
+  normalizeImagePdfFiles,
+  createImagePdfFileSignature,
+  createImagePdfId,
+  readImagePdfDimensions,
+  waitForImagePdfDownloadQueue,
+  sanitizePdfFilename,
+  formatBytes,
+  clamp,
+  escapeHtml,
+  downloadBlob
 };
