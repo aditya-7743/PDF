@@ -26,7 +26,88 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#039;");
 }
 
-function downloadBlob(blob, filename) {
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result;
+      const base64 = typeof res === "string" ? res.split(",")[1] : "";
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveBlobDirectly(blob, targetPath) {
+  const res = await fetch("/api/save_file", {
+    method: "POST",
+    headers: {
+      "X-Target-Path": encodeURIComponent(targetPath),
+    },
+    body: blob,
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to save file: ${res.statusText}`);
+  }
+  return await res.json();
+}
+
+async function previewPdfDirectly(blob, filename = "document.pdf") {
+  try {
+    const res = await fetch("/api/preview_pdf", {
+      method: "POST",
+      headers: {
+        "X-Filename": encodeURIComponent(filename),
+      },
+      body: blob,
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn("Direct preview_pdf failed:", e);
+  }
+  return null;
+}
+
+async function downloadBlob(blob, filename) {
+  // Check if running in desktop app
+  if (window.pywebview?.api?.choose_save_path) {
+    try {
+      const chooseRes = await window.pywebview.api.choose_save_path(filename);
+      if (chooseRes && chooseRes.cancelled) {
+        setImagePdfStatus("Save cancelled.");
+        return { cancelled: true };
+      }
+      if (chooseRes && chooseRes.path) {
+        setImagePdfStatus(`Saving ${filename}...`);
+        const saveRes = await saveBlobDirectly(blob, chooseRes.path);
+        if (saveRes && saveRes.success) {
+          setImagePdfStatus(`Saved: ${chooseRes.filename || filename}`);
+          return { success: true, path: chooseRes.path };
+        }
+      }
+    } catch (err) {
+      console.warn("Desktop native save failed, falling back to browser download:", err);
+    }
+  } else if (window.pywebview?.api?.save_file) {
+    try {
+      const base64Data = await blobToBase64(blob);
+      const res = await window.pywebview.api.save_file(filename, base64Data);
+      if (res && res.success) {
+        setImagePdfStatus(`Saved: ${res.filename || filename}`);
+        return res;
+      }
+      if (res && res.cancelled) {
+        setImagePdfStatus("Save cancelled.");
+        return res;
+      }
+    } catch (err) {
+      console.warn("Desktop save_file failed, falling back to browser download:", err);
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -96,6 +177,8 @@ function bindImagePdfEvents() {
 
   clearButtons.forEach((button) => button.addEventListener("click", clearImagePdfItems));
   convertButton?.addEventListener("click", exportImagePdf);
+  const previewAllButton = root.querySelector("[data-image-pdf-preview-all]");
+  previewAllButton?.addEventListener("click", previewFullImagePdf);
   reverseButton?.addEventListener("click", reverseImagePdfQueue);
   shuffleButton?.addEventListener("click", shuffleImagePdfQueue);
 
@@ -232,15 +315,14 @@ async function addImagePdfFiles(fileList) {
     return;
   }
 
-  setImagePdfStatus("Adding images...");
+  setImagePdfStatus(`Adding ${files.length} images...`);
   const knownSignatures = new Set(imagePdfItems.map((item) => item.signature).filter(Boolean));
   let addedCount = 0;
   let duplicateCount = 0;
-  let failedCount = 0;
-  let firstAddedId = "";
 
-  for (const file of files) {
-    const signature = await createImagePdfFileSignature(file);
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    const signature = createImagePdfFileSignature(file);
     if (knownSignatures.has(signature)) {
       duplicateCount += 1;
       continue;
@@ -260,16 +342,6 @@ async function addImagePdfFiles(fileList) {
       height: 0,
     };
 
-    try {
-      const dimensions = await readImagePdfDimensions(item.url);
-      item.width = dimensions.width;
-      item.height = dimensions.height;
-    } catch {
-      URL.revokeObjectURL(item.url);
-      failedCount += 1;
-      continue;
-    }
-
     imagePdfItems.push(item);
     addedCount += 1;
   }
@@ -278,7 +350,6 @@ async function addImagePdfFiles(fileList) {
   const messages = [];
   if (addedCount) messages.push(`${addedCount} added`);
   if (duplicateCount) messages.push(`${duplicateCount} duplicate${duplicateCount === 1 ? "" : "s"} skipped`);
-  if (failedCount) messages.push(`${failedCount} failed`);
   setImagePdfStatus(messages.length ? `${messages.join(". ")}. ${imagePdfItems.length} total.` : "No new images added.");
 }
 
@@ -312,17 +383,7 @@ function readImagePdfDimensions(url) {
 }
 
 
-async function createImagePdfFileSignature(file) {
-  if (window.crypto?.subtle && file.arrayBuffer) {
-    try {
-      const buffer = await file.arrayBuffer();
-      const digest = await window.crypto.subtle.digest("SHA-256", buffer);
-      return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-    } catch {
-      // Fall through to a stable metadata signature.
-    }
-  }
-
+function createImagePdfFileSignature(file) {
   return [
     "meta",
     file.name || "",
@@ -342,7 +403,7 @@ function handleImagePdfListAction(event) {
   const button = event.target.closest("[data-image-pdf-item-action]");
   if (!button) {
     const item = event.target.closest("[data-image-pdf-item]");
-    if (item && event.target.closest(".image-pdf-thumb-frame")) {
+    if (item && !event.target.closest("button, select, input")) {
       openImagePdfLightbox(item.dataset.imagePdfItemId);
     }
     return;
@@ -407,6 +468,17 @@ function openImagePdfLightbox(id) {
       </div>
     </div>
   `;
+  const lbImg = overlay.querySelector(".image-pdf-lightbox-image");
+  if (lbImg) {
+    lbImg.onload = () => {
+      item.width = lbImg.naturalWidth;
+      item.height = lbImg.naturalHeight;
+      const subtitle = overlay.querySelector(".image-pdf-lightbox-title span");
+      if (subtitle) {
+        subtitle.textContent = `Original image | ${item.width} x ${item.height} px | ${formatBytes(item.size)}`;
+      }
+    };
+  }
   overlay.addEventListener("click", (event) => {
     const actualButton = event.target.closest("[data-image-pdf-lightbox-actual]");
     const fitButton = event.target.closest("[data-image-pdf-lightbox-fit]");
@@ -760,6 +832,19 @@ async function exportImagePdf() {
   }
 
   const options = readImagePdfOptions();
+  const defaultFilename = `${sanitizePdfFilename(options.filename)}.pdf`;
+  let targetSavePath = "";
+
+  // In desktop app, immediately open native Windows Save As dialog
+  if (window.pywebview?.api?.choose_save_path) {
+    const chooseRes = await window.pywebview.api.choose_save_path(defaultFilename);
+    if (!chooseRes || chooseRes.cancelled || !chooseRes.path) {
+      setImagePdfStatus("Save cancelled.");
+      return;
+    }
+    targetSavePath = chooseRes.path;
+  }
+
   beginImagePdfJob("Preparing PDF...");
   setImagePdfBusy(true);
   try {
@@ -769,11 +854,44 @@ async function exportImagePdf() {
     });
     assertImagePdfNotCancelled();
     clearImagePdfProgress();
-    downloadBlob(pdfBlob, `${sanitizePdfFilename(options.filename)}.pdf`);
-    setImagePdfStatus(`PDF created: ${imagePdfItems.length} page${imagePdfItems.length === 1 ? "" : "s"}.`);
+
+    if (targetSavePath) {
+      setImagePdfStatus(`Saving PDF...`);
+      await saveBlobDirectly(pdfBlob, targetSavePath);
+      setImagePdfStatus(`PDF saved: ${imagePdfItems.length} page${imagePdfItems.length === 1 ? "" : "s"}.`);
+    } else {
+      await downloadBlob(pdfBlob, defaultFilename);
+      setImagePdfStatus(`PDF created: ${imagePdfItems.length} page${imagePdfItems.length === 1 ? "" : "s"}.`);
+    }
   } catch (error) {
     clearImagePdfProgress();
     setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || "PDF could not be created.");
+  } finally {
+    setImagePdfBusy(false);
+  }
+}
+
+async function previewFullImagePdf() {
+  if (!imagePdfItems.length) {
+    setImagePdfStatus("Add images first.");
+    return;
+  }
+
+  const options = readImagePdfOptions();
+  beginImagePdfJob("Preparing preview...");
+  setImagePdfBusy(true);
+  try {
+    const pdfBlob = await createImagePdfBlob(imagePdfItems, options, ({ index, total, label }) => {
+      assertImagePdfNotCancelled();
+      setImagePdfProgress(index + 1, total, `Preparing preview: ${index + 1}/${total}: ${label}`);
+    });
+    assertImagePdfNotCancelled();
+    clearImagePdfProgress();
+    await showImagePdfPreviewModal({ name: options.filename || "image-to-pdf", items: imagePdfItems }, pdfBlob);
+    setImagePdfStatus(`Preview ready: ${options.filename || "image-to-pdf"}.pdf`);
+  } catch (error) {
+    clearImagePdfProgress();
+    setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || "Preview could not be created.");
   } finally {
     setImagePdfBusy(false);
   }
@@ -812,7 +930,7 @@ async function handleImagePdfPartPreview(event) {
     });
     assertImagePdfNotCancelled();
     clearImagePdfProgress();
-    showImagePdfPreview(part, pdfBlob);
+    await showImagePdfPreviewModal(part, pdfBlob);
     setImagePdfStatus(`Preview ready: ${part.name}.pdf`);
   } catch (error) {
     clearImagePdfProgress();
@@ -825,6 +943,18 @@ async function handleImagePdfPartPreview(event) {
 
 async function exportImagePdfPart(part) {
   const options = readImagePdfOptions();
+  const defaultFilename = `${sanitizePdfFilename(part.name)}.pdf`;
+  let targetSavePath = "";
+
+  if (window.pywebview?.api?.choose_save_path) {
+    const chooseRes = await window.pywebview.api.choose_save_path(defaultFilename);
+    if (!chooseRes || chooseRes.cancelled || !chooseRes.path) {
+      setImagePdfStatus("Save cancelled.");
+      return;
+    }
+    targetSavePath = chooseRes.path;
+  }
+
   beginImagePdfJob(`Preparing ${part.name}.pdf`);
   setImagePdfBusy(true);
   try {
@@ -835,8 +965,15 @@ async function exportImagePdfPart(part) {
     });
     assertImagePdfNotCancelled();
     clearImagePdfProgress();
-    downloadBlob(pdfBlob, `${sanitizePdfFilename(part.name)}.pdf`);
-    setImagePdfStatus(`Part ${part.number} created: pages ${part.startPage}-${part.endPage}.`);
+
+    if (targetSavePath) {
+      setImagePdfStatus(`Saving ${part.name}.pdf...`);
+      await saveBlobDirectly(pdfBlob, targetSavePath);
+      setImagePdfStatus(`Part ${part.number} saved: pages ${part.startPage}-${part.endPage}.`);
+    } else {
+      await downloadBlob(pdfBlob, defaultFilename);
+      setImagePdfStatus(`Part ${part.number} created: pages ${part.startPage}-${part.endPage}.`);
+    }
   } catch (error) {
     clearImagePdfProgress();
     setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || `Part ${part.number} could not be created.`);
@@ -859,23 +996,55 @@ async function exportAllImagePdfParts() {
   }
 
   const options = readImagePdfOptions();
+  let destinationFolder = "";
+
+  // In desktop app, immediately open native Windows Folder Picker with 0ms delay!
+  if (window.pywebview?.api?.choose_folder && parts.length > 1) {
+    const folderRes = await window.pywebview.api.choose_folder("Select folder to save split PDFs");
+    if (!folderRes || folderRes.cancelled || !folderRes.folder) {
+      setImagePdfStatus("Save cancelled.");
+      return;
+    }
+    destinationFolder = folderRes.folder;
+  }
+
   const totalPages = parts.reduce((sum, part) => sum + part.items.length, 0);
   let completedPages = 0;
   beginImagePdfJob(`Preparing ${parts.length} PDFs...`);
   setImagePdfBusy(true);
   try {
-    for (const part of parts) {
+    for (let i = 0; i < parts.length; i += 1) {
+      const part = parts[i];
       const pdfBlob = await createImagePdfBlob(part.items, options, ({ index, total, label }) => {
         assertImagePdfNotCancelled();
         setImagePdfProgress(completedPages + index + 1, totalPages, `Part ${part.number}/${parts.length}: ${index + 1}/${total}: ${label}`);
       });
       assertImagePdfNotCancelled();
-      downloadBlob(pdfBlob, `${sanitizePdfFilename(part.name)}.pdf`);
+
+      const partFilename = `${sanitizePdfFilename(part.name)}.pdf`;
+      if (destinationFolder) {
+        const fullPath = `${destinationFolder}\\${partFilename}`;
+        setImagePdfStatus(`Saving part ${part.number}/${parts.length}...`);
+        await saveBlobDirectly(pdfBlob, fullPath);
+      } else {
+        await downloadBlob(pdfBlob, partFilename);
+        await waitForImagePdfDownloadQueue();
+      }
+
       completedPages += part.items.length;
-      await waitForImagePdfDownloadQueue();
     }
+
     clearImagePdfProgress();
-    setImagePdfStatus(`${parts.length} PDFs created.`);
+    if (destinationFolder) {
+      try {
+        await window.pywebview?.api?.open_path?.(destinationFolder);
+      } catch {
+        // ignore
+      }
+      setImagePdfStatus(`Saved all ${parts.length} PDFs to: ${destinationFolder}`);
+    } else {
+      setImagePdfStatus(`${parts.length} PDFs created.`);
+    }
   } catch (error) {
     clearImagePdfProgress();
     setImagePdfStatus(isImagePdfCancelError(error) ? "Cancelled." : error?.message || "Split PDFs could not be created.");
@@ -930,7 +1099,7 @@ function renderImagePdfQueue() {
           <div class="image-pdf-thumb-frame">
             <span class="image-pdf-drag-handle" title="Drag to reorder" aria-hidden="true"></span>
             <span class="image-pdf-order">${index + 1}</span>
-            <img class="image-pdf-thumb" src="${escapeHtml(item.url)}" alt="" draggable="false" style="--image-pdf-rotation: ${rotation}deg" />
+            <img class="image-pdf-thumb" loading="lazy" decoding="async" src="${escapeHtml(item.url)}" alt="" draggable="false" style="--image-pdf-rotation: ${rotation}deg" onload="window.onImagePdfThumbLoad?.(this, '${escapeHtml(item.id)}')" />
             ${rotation ? `<span class="image-pdf-rotation-badge">${rotation}&deg;</span>` : ""}
           </div>
           <div class="image-pdf-item-main">
@@ -951,6 +1120,17 @@ function renderImagePdfQueue() {
   renderImagePdfParts();
 }
 
+window.onImagePdfThumbLoad = function(img, id) {
+  const item = imagePdfItems.find((entry) => entry.id === id);
+  if (item && img.naturalWidth) {
+    item.width = img.naturalWidth;
+    item.height = img.naturalHeight;
+    const metaEl = img.closest(".image-pdf-item")?.querySelector(".image-pdf-item-meta");
+    if (metaEl) {
+      metaEl.textContent = `${item.width} x ${item.height} px | ${formatBytes(item.size)}`;
+    }
+  }
+};
 
 function renderImagePdfParts() {
   const list = app.querySelector("[data-image-pdf-split-list]");
@@ -1145,43 +1325,94 @@ function waitForImagePdfDownloadQueue() {
 }
 
 
-function showImagePdfPreview(part, pdfBlob) {
-  const preview = app.querySelector("[data-image-pdf-preview]");
-  if (!preview) return;
-
+async function showImagePdfPreviewModal(docInfo, pdfBlob) {
   closeImagePdfPreview();
-  imagePdfPreviewUrl = URL.createObjectURL(pdfBlob);
-  preview.hidden = false;
-  preview.innerHTML = `
-    <div class="image-pdf-preview-head">
-      <div class="image-pdf-preview-title">
-        <strong>${escapeHtml(part.name)}.pdf</strong>
-        <span>${part.items.length} page${part.items.length === 1 ? "" : "s"} | ${formatBytes(pdfBlob.size)}</span>
+
+  const isDesktop = Boolean(window.pywebview);
+
+  // If running in desktop app, launch in Windows native PDF viewer immediately!
+  if (isDesktop) {
+    try {
+      await previewPdfDirectly(pdfBlob, `${sanitizePdfFilename(docInfo.name)}.pdf`);
+    } catch (e) {
+      console.warn("Desktop preview_pdf failed:", e);
+    }
+  }
+
+  // Display the rich in-app page-by-page preview modal
+  const overlay = document.createElement("div");
+  overlay.className = "image-pdf-preview-modal-overlay";
+  overlay.dataset.imagePdfPreviewModal = "";
+  overlay.innerHTML = `
+    <div class="image-pdf-preview-dialog" role="dialog" aria-modal="true" aria-label="PDF Preview">
+      <div class="image-pdf-preview-modal-head">
+        <div class="image-pdf-preview-modal-title">
+          <strong>${escapeHtml(docInfo.name)}.pdf</strong>
+          <span>${docInfo.items.length} page${docInfo.items.length === 1 ? "" : "s"} | ${formatBytes(pdfBlob.size)}</span>
+        </div>
+        <div class="image-pdf-preview-modal-actions">
+          ${isDesktop ? `<button class="image-pdf-btn-open-system" type="button" title="Open in Windows Default PDF Reader">Open in PDF Reader</button>` : `<button class="image-pdf-btn-open-tab" type="button" title="Open in new browser tab">Open in New Tab</button>`}
+          <button class="image-pdf-btn-modal-save" type="button">Save PDF</button>
+          <button class="image-pdf-preview-modal-close" type="button">Close</button>
+        </div>
       </div>
-      <button class="image-pdf-preview-close" data-image-pdf-preview-close type="button">Close</button>
+      <div class="image-pdf-preview-modal-body">
+        <div class="image-pdf-preview-pages">
+          ${docInfo.items.map((item, idx) => `
+            <div class="image-pdf-preview-page-card">
+              <div class="image-pdf-preview-page-badge">Page ${idx + 1} of ${docInfo.items.length}</div>
+              <div class="image-pdf-preview-page-frame">
+                <img src="${escapeHtml(item.url)}" alt="Page ${idx + 1}" style="transform: rotate(${normalizeImagePdfRotation(item.rotation || 0)}deg);" />
+              </div>
+              <div class="image-pdf-preview-page-caption">${escapeHtml(item.name)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
     </div>
-    <iframe class="image-pdf-preview-frame" src="${escapeHtml(imagePdfPreviewUrl)}" title="${escapeHtml(part.name)} preview"></iframe>
   `;
+
+  overlay.querySelector(".image-pdf-btn-open-system")?.addEventListener("click", async () => {
+    await previewPdfDirectly(pdfBlob, `${sanitizePdfFilename(docInfo.name)}.pdf`);
+  });
+
+  overlay.querySelector(".image-pdf-btn-open-tab")?.addEventListener("click", () => {
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+
+  overlay.querySelector(".image-pdf-btn-modal-save")?.addEventListener("click", async () => {
+    await downloadBlob(pdfBlob, `${sanitizePdfFilename(docInfo.name)}.pdf`);
+  });
+
+  overlay.querySelector(".image-pdf-preview-modal-close")?.addEventListener("click", () => {
+    closeImagePdfPreview();
+  });
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeImagePdfPreview();
+    }
+  });
+
+  document.body.appendChild(overlay);
+  document.body.classList.add("is-image-pdf-preview-open");
 }
 
+function closeImagePdfPreview() {
+  document.querySelector("[data-image-pdf-preview-modal]")?.remove();
+  document.body.classList.remove("is-image-pdf-preview-open");
+  if (imagePdfPreviewUrl) {
+    URL.revokeObjectURL(imagePdfPreviewUrl);
+    imagePdfPreviewUrl = "";
+  }
+}
 
 function handleImagePdfPreviewAction(event) {
   if (event.target.closest("[data-image-pdf-preview-close]")) {
     closeImagePdfPreview();
   }
-}
-
-
-function closeImagePdfPreview() {
-  if (imagePdfPreviewUrl) {
-    URL.revokeObjectURL(imagePdfPreviewUrl);
-    imagePdfPreviewUrl = "";
-  }
-
-  const preview = app.querySelector("[data-image-pdf-preview]");
-  if (!preview) return;
-  preview.hidden = true;
-  preview.innerHTML = "";
 }
 
 
@@ -1337,5 +1568,8 @@ export {
   formatBytes,
   clamp,
   escapeHtml,
-  downloadBlob
+  downloadBlob,
+  blobToBase64,
+  saveBlobDirectly,
+  previewPdfDirectly
 };

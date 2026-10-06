@@ -111,6 +111,9 @@ export function renderRibbonHome(state, settings, activeQ, activeIdx, totalSlide
             <button type="button" class="ppt-fs-ribbon-btn-sm ${settings.showQBadge ? 'is-active' : ''}" data-action="ppt-add-layout-element" data-element="qbadge" title="Add / Toggle Question Number (Q.1)">
               <span>${settings.showQBadge ? '✓' : '+'} Q.No</span>
             </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm ${(settings.qBadgeStyle === 'text' || settings.qBadgeStyle === 'none' || settings.qBadgeStyle === 'clean') ? 'is-active' : ''}" data-action="ppt-toggle-qbadge-style" title="Toggle Question Number Badge Style: Pill vs Bina Badge (Plain Text)" style="padding:1px 5px; font-size:10px;">
+              <span>${(settings.qBadgeStyle === 'text' || settings.qBadgeStyle === 'none' || settings.qBadgeStyle === 'clean') ? '🔤 NoBadge' : '🏷️ Badge'}</span>
+            </button>
             <button type="button" class="ppt-fs-ribbon-btn-sm ${settings.showEnglish ? 'is-active' : ''}" data-action="ppt-add-layout-element" data-element="english" title="Add English Question Box below">
               <span>${settings.showEnglish ? '✓' : '+'} English</span>
             </button>
@@ -126,11 +129,17 @@ export function renderRibbonHome(state, settings, activeQ, activeIdx, totalSlide
             <button type="button" class="ppt-fs-ribbon-btn-sm ${settings.showExamTag ? 'is-active' : ''}" data-action="ppt-add-layout-element" data-element="exam" title="Add Exam Shift Tag below">
               <span>${settings.showExamTag ? '✓' : '+'} Exam Tag</span>
             </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm ${(settings.examTagStyle === 'text' || settings.examTagStyle === 'none') ? 'is-active' : ''}" data-action="ppt-toggle-exam-style" title="Toggle Exam Tag Style: Pill vs Bina Badge (Plain Text)" style="padding:1px 5px; font-size:10px;">
+              <span>${(settings.examTagStyle === 'text' || settings.examTagStyle === 'none') ? '🔤 Plain' : '🔴 Pill'}</span>
+            </button>
             <button type="button" class="ppt-fs-ribbon-btn-sm ${settings.showOptions ? 'is-active' : ''}" data-action="ppt-add-layout-element" data-element="options" title="Add Options Grid (A, B, C, D) below">
               <span>${settings.showOptions ? '✓' : '+'} Options</span>
             </button>
             <button type="button" class="ppt-fs-ribbon-btn-sm ${settings.showFooter ? 'is-active' : ''}" data-action="ppt-add-layout-element" data-element="footer" title="Add / Toggle Footer Bar">
               <span>${settings.showFooter ? '✓' : '+'} Footer</span>
+            </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-reset-positions" title="Reset all elements to default clean positions (Fix all shifted positions instantly)" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:800; margin-left:2px;">
+              🎯 Fix Layout
             </button>
           </div>
         </div>

@@ -9,7 +9,9 @@ import {
   sanitizePdfFilename,
   clamp,
   escapeHtml,
-  downloadBlob
+  downloadBlob,
+  blobToBase64,
+  saveBlobDirectly
 } from "../imagePdf/imagePdfController.js";
 
 const IMAGE_RESIZE_SETTINGS_KEY = "math-original-form-builder:image-resize-settings:v1";
@@ -169,14 +171,16 @@ async function addImageResizeFiles(fileList) {
     return;
   }
 
-  setImageResizeStatus("Adding images...");
+  setImageResizeStatus(`Adding ${files.length} images...`);
   const knownSignatures = new Set(imageResizeItems.map((item) => item.signature).filter(Boolean));
   let addedCount = 0;
   let duplicateCount = 0;
   let failedCount = 0;
+  let firstAddedId = "";
 
-  for (const file of files) {
-    const signature = await createImagePdfFileSignature(file);
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    const signature = createImagePdfFileSignature(file);
     if (knownSignatures.has(signature)) {
       duplicateCount += 1;
       continue;
@@ -195,16 +199,6 @@ async function addImageResizeFiles(fileList) {
       height: 0,
     };
 
-    try {
-      const dimensions = await readImagePdfDimensions(item.url);
-      item.width = dimensions.width;
-      item.height = dimensions.height;
-    } catch {
-      URL.revokeObjectURL(item.url);
-      failedCount += 1;
-      continue;
-    }
-
     imageResizeItems.push(item);
     firstAddedId = firstAddedId || item.id;
     addedCount += 1;
@@ -214,6 +208,17 @@ async function addImageResizeFiles(fileList) {
     imageResizeSelectedId = firstAddedId;
   }
   ensureImageResizeSelection();
+
+  const selected = getSelectedImageResizeItem();
+  if (selected && (!selected.width || !selected.height)) {
+    try {
+      const dimensions = await readImagePdfDimensions(selected.url);
+      selected.width = dimensions.width;
+      selected.height = dimensions.height;
+    } catch {
+      // ignore
+    }
+  }
 
   if (addedCount && imageResizeItems.length === addedCount) {
     applyImageResizeOriginalDimensions();
@@ -451,23 +456,29 @@ async function drawImageResizePreview() {
     return;
   }
 
-  const options = readImageResizeOptions();
-  const dimensions = getImageResizeOutputPixels(item, options, false);
-  if (dimensions.error) {
-    canvas.hidden = true;
-    if (empty) {
-      empty.hidden = false;
-      empty.textContent = dimensions.error;
-    }
-    return;
-  }
-
-  if (empty) empty.hidden = true;
-  canvas.hidden = false;
-
   try {
     const image = await loadImageElement(item.url);
     if (token !== imageResizePreviewDrawToken) return;
+
+    if (!item.width || !item.height) {
+      item.width = image.naturalWidth;
+      item.height = image.naturalHeight;
+      updateImageResizeLiveSize();
+    }
+
+    const options = readImageResizeOptions();
+    const dimensions = getImageResizeOutputPixels(item, options, false);
+    if (dimensions.error) {
+      canvas.hidden = true;
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = dimensions.error;
+      }
+      return;
+    }
+
+    if (empty) empty.hidden = true;
+    canvas.hidden = false;
 
     const scale = getImageResizePreviewScale(dimensions.width, dimensions.height);
     const previewWidth = Math.max(1, Math.round(dimensions.width * scale));
@@ -522,7 +533,7 @@ function renderImageResizeQueue() {
       return `
         <article class="image-resize-item${activeClass}" data-image-resize-item data-image-resize-item-id="${escapeHtml(item.id)}">
           <div class="image-resize-thumb-frame">
-            <img class="image-resize-thumb" src="${escapeHtml(item.url)}" alt="" draggable="false" />
+            <img class="image-resize-thumb" loading="lazy" decoding="async" src="${escapeHtml(item.url)}" alt="" draggable="false" onload="window.onImageResizeThumbLoad?.(this, '${escapeHtml(item.id)}')" />
           </div>
           <div class="image-resize-item-main">
             <div class="image-resize-item-name">${escapeHtml(item.name)}</div>
@@ -534,6 +545,21 @@ function renderImageResizeQueue() {
     })
     .join("");
 }
+
+window.onImageResizeThumbLoad = function(img, id) {
+  const item = imageResizeItems.find((entry) => entry.id === id);
+  if (item && img.naturalWidth) {
+    item.width = img.naturalWidth;
+    item.height = img.naturalHeight;
+    const metaEl = img.closest(".image-resize-item")?.querySelector(".image-resize-item-meta");
+    if (metaEl) {
+      const options = readImageResizeOptions();
+      const output = getImageResizeOutputPixels(item, options, false);
+      const outputMeta = output.error ? output.error : `${output.width} x ${output.height} px`;
+      metaEl.textContent = `${item.width} x ${item.height} px | ${formatBytes(item.size)} -> ${outputMeta}`;
+    }
+  }
+};
 
 
 function getImageResizeOutputPixels(item, options, shouldThrow = true) {
@@ -604,18 +630,46 @@ async function downloadImageResizeFormat(format) {
 
   const options = readImageResizeOptions();
   const targetBytes = getImageResizeTargetBytes(options);
+
+  let destinationFolder = "";
+  // In desktop mode with multiple files, immediately prompt for destination folder (0ms delay!)
+  if (window.pywebview?.api?.choose_folder && imageResizeItems.length > 1) {
+    const folderRes = await window.pywebview.api.choose_folder("Select folder to save resized images");
+    if (!folderRes || folderRes.cancelled || !folderRes.folder) {
+      setImageResizeStatus("Save cancelled.");
+      return;
+    }
+    destinationFolder = folderRes.folder;
+  }
+
   setImageResizeBusy(true);
   try {
     for (let index = 0; index < imageResizeItems.length; index += 1) {
       const item = imageResizeItems[index];
-      setImageResizeStatus(`Preparing ${index + 1}/${imageResizeItems.length}: ${item.name}`);
+      setImageResizeStatus(`Resizing ${index + 1}/${imageResizeItems.length}: ${item.name}`);
       const result = await createImageResizeBlob(item, safeFormat, options, targetBytes);
-      downloadBlob(result.blob, formatImageResizeFileName(item.name, options.suffix, safeFormat));
-      await waitForImagePdfDownloadQueue();
+      const outFilename = formatImageResizeFileName(item.name, options.suffix, safeFormat);
+
+      if (destinationFolder) {
+        const fullPath = `${destinationFolder}\\${outFilename}`;
+        await saveBlobDirectly(result.blob, fullPath);
+      } else {
+        await downloadBlob(result.blob, outFilename);
+        await waitForImagePdfDownloadQueue();
+      }
     }
 
-    const targetNote = safeFormat === "png" && targetBytes ? " PNG keeps browser lossless output." : "";
-    setImageResizeStatus(`${imageResizeItems.length} ${safeFormat.toUpperCase()} file${imageResizeItems.length === 1 ? "" : "s"} downloaded.${targetNote}`);
+    if (destinationFolder) {
+      try {
+        await window.pywebview?.api?.open_path?.(destinationFolder);
+      } catch {
+        // ignore
+      }
+      setImageResizeStatus(`Saved ${imageResizeItems.length} images to: ${destinationFolder}`);
+    } else {
+      const targetNote = safeFormat === "png" && targetBytes ? " PNG keeps browser lossless output." : "";
+      setImageResizeStatus(`${imageResizeItems.length} ${safeFormat.toUpperCase()} file${imageResizeItems.length === 1 ? "" : "s"} downloaded.${targetNote}`);
+    }
   } catch (error) {
     setImageResizeStatus(error?.message || "Images could not be resized.");
   } finally {
@@ -650,6 +704,9 @@ async function createImageResizeBlob(item, format, options, targetBytes = 0) {
   }
 
   const blob = await canvasToImageBlob(canvas, mimeType, format === "png" ? undefined : options.quality / 100);
+  canvas.width = 1;
+  canvas.height = 1;
+  image.src = "";
   return { blob, ...dimensions, quality: format === "png" ? 100 : options.quality };
 }
 
@@ -678,6 +735,8 @@ async function createTargetedImageResizeBlob(canvas, mimeType, maxQuality, targe
     }
   }
 
+  canvas.width = 1;
+  canvas.height = 1;
   return {
     blob: best || smallest,
     ...dimensions,

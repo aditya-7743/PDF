@@ -5,6 +5,14 @@ import { escapeHtml } from "../ribbon/ribbonCommon.js";
 import { calculateAutoFitZoom } from "../fullscreenController.js";
 
 function renderCanvasQBadge(settings, activeQ, activeIdx) {
+  const isPlain = (settings.qBadgeStyle === "text" || settings.qBadgeStyle === "none" || settings.qBadgeStyle === "clean");
+  const bg = isPlain ? "transparent" : (settings.qBadgeBg || "#FFFFFF");
+  const shadow = isPlain ? "none" : ((settings.qBadgeShadow === false || settings.qBadgeBg === "transparent") ? "none" : "0 2px 6px rgba(0,0,0,0.35)");
+  const pad = isPlain ? "0px 4px" : (settings.qBadgeStyle === "box" ? "4px 10px" : "4px 14px");
+  const radius = isPlain ? "0px" : (settings.qBadgeStyle === "box" ? "6px" : (settings.qBadgeRadius !== undefined ? `${settings.qBadgeRadius}px` : "14px"));
+  const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
+  const textColor = settings.qBadgeColor || (isPlain ? (settings.hindiColor || settings.engColor || defaultQColor) : defaultQColor);
+
   return `
     <div class="slide-standalone-q-badge-box canva-transform-box ppt-resizable-box" style="display:${(!settings.showHeader && settings.showQBadge) ? 'inline-flex' : 'none'}; align-items:center; margin-bottom:8px; transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px);">
       <div class="canva-drag-bar">
@@ -13,7 +21,7 @@ function renderCanvasQBadge(settings, activeQ, activeIdx) {
         <button type="button" class="canva-order-btn" data-action="ppt-move-layout-element" data-element="qbadge" data-dir="down" title="Move Down">▼</button>
         <button type="button" class="canva-order-btn canva-remove-btn" data-action="ppt-remove-layout-element" data-element="qbadge" title="Remove Q.No">✕</button>
       </div>
-      <div class="slide-q-badge" contenteditable="true" spellcheck="false" data-ppt-canvas-field="number" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || (settings.theme === 'purple' ? '#4C1D95' : (settings.theme === 'navy' ? '#0A1931' : '#7A0000'))}; font-size:${settings.qBadgeSize || 18}px; padding:4px 14px; border-radius:14px; font-weight:800; box-shadow: 0 2px 6px rgba(0,0,0,0.35);">
+      <div class="slide-q-badge ${isPlain ? 'slide-q-no-badge' : ''}" data-style="${settings.qBadgeStyle || 'badge'}" contenteditable="true" spellcheck="false" data-ppt-canvas-field="number" style="background:${bg}; color:${textColor}; font-size:${settings.qBadgeSize || 18}px; padding:${pad}; border-radius:${radius}; font-weight:800; box-shadow:${shadow};">
         ${escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
       </div>
       <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="qbadge-resize-nw" title="Scale"></div>
@@ -85,6 +93,17 @@ function renderCanvasHindi(settings, activeQ) {
 }
 
 function renderCanvasExamTag(settings, activeQ, examTagPos, examTagStyle) {
+  const isPlainExam = (examTagStyle === "text" || examTagStyle === "none" || examTagStyle === "clean");
+  const defaultBg = (examTagStyle === "highlight" ? "#FEF08A" : (examTagStyle === "blue" ? "#2563EB" : "#DC2626"));
+  const examBg = isPlainExam ? "transparent" : (settings.examTagBg || defaultBg);
+  const examColor = isPlainExam
+    ? (settings.examTagColor || settings.examColor || "#2563EB")
+    : (settings.examTagColor || (examTagStyle === "highlight" ? "#854D0E" : "#FFFFFF"));
+  const examRadius = isPlainExam ? "0px" : (settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === "pill" || examTagStyle === "blue" ? "18px" : "4px"));
+  const examPadY = isPlainExam ? 0 : (settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4);
+  const examPadX = isPlainExam ? 4 : (settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === "pill" || examTagStyle === "blue" ? 14 : 6));
+  const examShadow = (isPlainExam || examTagStyle === "highlight" || settings.examTagBg === "transparent") ? "none" : "0 2px 6px rgba(0,0,0,0.35)";
+
   return `
     <div class="canva-transform-box slide-exam-section ppt-resizable-box" style="display:${(settings.showExamTag && (examTagPos === 'below-question' || examTagPos === 'above-options')) ? 'inline-flex' : 'none'}; transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px);">
       <div class="canva-drag-bar">
@@ -93,14 +112,14 @@ function renderCanvasExamTag(settings, activeQ, examTagPos, examTagStyle) {
         <button type="button" class="canva-order-btn" data-action="ppt-move-layout-element" data-element="exam" data-dir="down" title="Move Down">▼</button>
         <button type="button" class="canva-order-btn canva-remove-btn" data-action="ppt-remove-layout-element" data-element="exam" title="Remove Exam Tag">✕</button>
       </div>
-      <div class="slide-standalone-exam-tag" data-style="${examTagStyle}" contenteditable="true" spellcheck="false" data-ppt-canvas-field="exam" style="
-        background:${examTagStyle === 'pill' ? (settings.examTagBg || '#DC2626') : (examTagStyle === 'highlight' ? '#FEF08A' : 'transparent')};
-        color:${examTagStyle === 'pill' ? (settings.examTagColor || '#FFFFFF') : (examTagStyle === 'highlight' ? '#854D0E' : (settings.examColor || '#FFFFFF'))};
+      <div class="slide-standalone-exam-tag ${isPlainExam ? 'slide-exam-no-badge' : ''}" data-style="${examTagStyle}" contenteditable="true" spellcheck="false" data-ppt-canvas-field="exam" style="
+        background:${examBg};
+        color:${examColor};
         font-size:${settings.examFontSize || 15}px;
-        border-radius:${settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === 'pill' ? '18px' : '4px')};
-        padding:${settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4}px ${settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === 'pill' ? 14 : 6)}px;
+        border-radius:${examRadius};
+        padding:${examPadY}px ${examPadX}px;
         font-weight:800;
-        box-shadow:${examTagStyle === 'pill' ? '0 2px 6px rgba(0,0,0,0.35)' : 'none'};
+        box-shadow:${examShadow};
       ">
         ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(Exam Name)')}
       </div>
@@ -204,6 +223,24 @@ export function renderSlideCanvas(state) {
     ? `background-image: url('${bgImgUrl}'); background-position: center; background-size: ${bgSize}; background-repeat: no-repeat; background-color: ${slideBgColor};`
     : `background-color: ${slideBgColor};`;
 
+  const isCustomBg = Boolean(bgImgUrl);
+  const resolvedHeaderBg = (settings.headerBg === "transparent" || (isCustomBg && (settings.headerBg === "transparent" || settings.isCustomTemplateMode || !settings.headerBg || settings.headerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.headerBg || "#7A0000");
+
+  const resolvedFooterBg = (settings.footerBg === "transparent" || (isCustomBg && (settings.footerBg === "transparent" || settings.isCustomTemplateMode || !settings.footerBg || settings.footerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.footerBg || "#7A0000");
+  const bodyTopPad = (!settings.showHeader && isCustomBg) ? Math.max(settings.questionPadding || 16, Number(settings.headerHeight) || 64) : (settings.questionPadding || 16);
+
+  const isPlainQ = (settings.qBadgeStyle === "text" || settings.qBadgeStyle === "none" || settings.qBadgeStyle === "clean");
+  const qBg = isPlainQ ? "transparent" : (settings.qBadgeBg || "#FFFFFF");
+  const qShadow = isPlainQ ? "none" : ((settings.qBadgeShadow === false || settings.qBadgeBg === "transparent") ? "none" : "0 2px 6px rgba(0,0,0,0.25)");
+  const qPad = isPlainQ ? "0px 4px" : (settings.qBadgeStyle === "box" ? "4px 10px" : "4px 14px");
+  const qRadius = isPlainQ ? "0px" : (settings.qBadgeStyle === "box" ? "6px" : (settings.qBadgeRadius !== undefined ? `${settings.qBadgeRadius}px` : "20px"));
+  const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
+  const qTextColor = settings.qBadgeColor || (isPlainQ ? (settings.hindiColor || settings.engColor || defaultQColor) : defaultQColor);
+
   // Pure White Blank Slide (Exact Microsoft PowerPoint Match)
   if (isBlankSlide) {
     return `
@@ -285,18 +322,23 @@ export function renderSlideCanvas(state) {
 
   return `
     <main class="ppt-fs-stage-viewport">
+      <div style="position:absolute; top:8px; right:14px; z-index:120; display:flex; gap:6px; align-items:center;">
+        <button type="button" class="ppt-fs-ribbon-btn-sm" data-action="ppt-reset-positions" title="Reset all shifted boxes to default positions (Fix Layout)" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-weight:800; padding:3px 9px; font-size:11px; box-shadow:0 2px 6px rgba(0,0,0,0.15); border-radius:6px; cursor:pointer;">
+          🎯 Fix / Reset Layout
+        </button>
+      </div>
       <div class="ppt-fs-stage-scaler-box" style="width:${Math.round(960 * (zoomLevel / 100))}px; height:${Math.round(540 * (zoomLevel / 100))}px;">
         <div class="ppt-fs-stage-scaler" style="transform: scale(${zoomLevel / 100});">
           <!-- 16:9 SLIDE CANVAS CONTAINER (EXACT Live Slide Render) -->
           <div class="ppt-slide-canvas-wrapper" style="${bgStyle}">
           <!-- Top Header Bar -->
-          <div class="slide-header-bar ppt-resizable-box" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${settings.headerBg || '#7A0000'}; height:${settings.headerHeight || 64}px;">
+          <div class="slide-header-bar ppt-resizable-box" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${resolvedHeaderBg}; height:${settings.headerHeight || 64}px;">
             <!-- Draggable Question Badge in Header -->
             <div class="slide-q-badge-box canva-transform-box ppt-resizable-box" style="transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px); display:${settings.showQBadge ? 'inline-flex' : 'none'};">
               <div class="canva-drag-bar">
                 <span class="canva-drag-pill" data-ppt-resize-type="qbadge-position">✥ Q.No</span>
               </div>
-              <div class="slide-q-badge" contenteditable="true" spellcheck="false" data-ppt-canvas-field="number" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || '#7A0000'}; font-size:${settings.qBadgeSize || 18}px;">
+              <div class="slide-q-badge ${isPlainQ ? 'slide-q-no-badge' : ''}" data-style="${settings.qBadgeStyle || 'badge'}" contenteditable="true" spellcheck="false" data-ppt-canvas-field="number" style="background:${qBg}; color:${qTextColor}; font-size:${settings.qBadgeSize || 18}px; padding:${qPad}; border-radius:${qRadius}; font-weight:800; box-shadow:${qShadow};">
                 ${escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
               </div>
               <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="qbadge-resize-nw" title="Scale"></div>
@@ -310,7 +352,7 @@ export function renderSlideCanvas(state) {
               <div class="canva-drag-bar">
                 <span class="canva-drag-pill" data-ppt-resize-type="exam-position">✥ Exam</span>
               </div>
-              <div class="slide-exam-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="exam" style="color:${settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
+              <div class="slide-exam-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="exam" style="color:${settings.examTagColor || settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
                 ${escapeHtml(activeQ.exam || settings.defaultExam || '(Exam Name)')}
               </div>
               <div class="canva-handle canva-corner canva-nw" data-ppt-resize-type="exam-resize-nw" title="Scale"></div>
@@ -325,7 +367,7 @@ export function renderSlideCanvas(state) {
                 <span class="canva-drag-pill" data-ppt-resize-type="topic-position">✥ Topic</span>
               </div>
               <div class="slide-topic-title" contenteditable="true" spellcheck="false" data-ppt-canvas-field="topic" style="color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px;">
-                ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
+                ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || (isCustomBg ? '' : 'TOPIC')).toUpperCase())}
               </div>
               ${settings.subtitleText ? `
                 <div class="slide-teacher-badge" contenteditable="true" spellcheck="false" data-ppt-canvas-field="subtitle" style="background:#FFFFFF; color:${settings.headerBg || '#7A0000'}; font-size:12px; font-weight:800; padding:2px 10px; border-radius:12px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); white-space:nowrap;">
@@ -342,7 +384,7 @@ export function renderSlideCanvas(state) {
           </div>
 
           <!-- Slide Body Area (Dynamic Stacked Layout) -->
-          <div class="slide-body-content" style="padding:${settings.questionPadding || 16}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%;">
+          <div class="slide-body-content" style="padding:${bodyTopPad}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%;">
             ${(settings.elementOrder || ["qbadge", "english", "divider", "hindi", "exam", "options"]).map((elemKey) => {
               switch (elemKey) {
                 case "qbadge":
@@ -478,7 +520,7 @@ export function renderSlideCanvas(state) {
 
 
           <!-- Footer Bar (If Enabled) with Height Handle -->
-          <div class="slide-footer-bar ppt-resizable-box" contenteditable="true" spellcheck="false" data-ppt-canvas-field="footer" title="Click to edit Footer on slide" style="display:${isBlankSlide || !settings.showFooter ? 'none' : 'flex'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
+          <div class="slide-footer-bar ppt-resizable-box" contenteditable="true" spellcheck="false" data-ppt-canvas-field="footer" title="Click to edit Footer on slide" style="display:${isBlankSlide || !settings.showFooter ? 'none' : 'flex'}; background:${resolvedFooterBg}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
             <div class="ppt-resize-handle ppt-resize-handle-s" style="top:-5px; bottom:auto;" data-ppt-resize-type="footer-height" title="Drag to adjust Footer Height"></div>
             ${settings.footerHtml || escapeHtml(settings.footerText || '')}
           </div>
@@ -515,6 +557,16 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
     ? `background-image: url('${bgImgUrl}'); background-position: center; background-size: ${bgSize}; background-repeat: no-repeat; background-color: ${slideBgColor};`
     : `background-color: ${slideBgColor};`;
 
+  const isCustomBg = Boolean(bgImgUrl);
+  const resolvedHeaderBg = (settings.headerBg === "transparent" || (isCustomBg && (settings.headerBg === "transparent" || settings.isCustomTemplateMode || !settings.headerBg || settings.headerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.headerBg || "#7A0000");
+
+  const resolvedFooterBg = (settings.footerBg === "transparent" || (isCustomBg && (settings.footerBg === "transparent" || settings.isCustomTemplateMode || !settings.footerBg || settings.footerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.footerBg || "#7A0000");
+  const bodyTopPad = (!settings.showHeader && isCustomBg) ? Math.max(settings.questionPadding || 16, Number(settings.headerHeight) || 64) : (settings.questionPadding || 16);
+
   if (isBlankSlide) {
     return `
       <div class="ppt-slide-canvas-wrapper ppt-blank-slide-canvas" style="${bgStyle}">
@@ -533,6 +585,14 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
   const examTagPos = settings.examTagPosition || "below-question";
   const examTagStyle = settings.examTagStyle || "pill";
 
+  const isPlainQ = (settings.qBadgeStyle === "text" || settings.qBadgeStyle === "none" || settings.qBadgeStyle === "clean");
+  const qBg = isPlainQ ? "transparent" : (settings.qBadgeBg || "#FFFFFF");
+  const qShadow = isPlainQ ? "none" : ((settings.qBadgeShadow === false || settings.qBadgeBg === "transparent") ? "none" : "0 2px 6px rgba(0,0,0,0.35)");
+  const qPad = isPlainQ ? "0px 4px" : (settings.qBadgeStyle === "box" ? "4px 10px" : "4px 14px");
+  const qRadius = isPlainQ ? "0px" : (settings.qBadgeStyle === "box" ? "6px" : (settings.qBadgeRadius !== undefined ? `${settings.qBadgeRadius}px` : "14px"));
+  const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
+  const qTextColor = settings.qBadgeColor || (isPlainQ ? (settings.hindiColor || settings.engColor || defaultQColor) : defaultQColor);
+
   const posXPercent = settings.boxPosX && Number(settings.boxPosX) !== 0
     ? Number(settings.boxPosX)
     : (settings.layoutPreset === "right-split" ? 42 : 0);
@@ -543,32 +603,32 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
   return `
     <div class="ppt-slide-canvas-wrapper" style="${bgStyle}">
       <!-- Top Header Bar -->
-      <div class="slide-header-bar" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${settings.headerBg || '#7A0000'}; height:${settings.headerHeight || 64}px;">
+      <div class="slide-header-bar" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${resolvedHeaderBg}; height:${settings.headerHeight || 64}px;">
         <div class="slide-q-badge-box" style="transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px); display:${settings.showQBadge ? 'inline-flex' : 'none'};">
-          <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || '#7A0000'}; font-size:${settings.qBadgeSize || 18}px;">
+          <div class="slide-q-badge ${isPlainQ ? 'slide-q-no-badge' : ''}" style="background:${qBg}; color:${qTextColor}; font-size:${settings.qBadgeSize || 18}px; padding:${qPad}; border-radius:${qRadius}; font-weight:800; box-shadow:${qShadow};">
             ${activeQ.numberHtml || escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
           </div>
         </div>
         <div class="slide-exam-header-box" style="transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px); display:${settings.showExamTag && examTagPos === 'header' ? 'inline-flex' : 'none'};">
-          <div class="slide-exam-title" style="color:${settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
+          <div class="slide-exam-title" style="color:${settings.examTagColor || settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px;">
             ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(Exam Name)')}
           </div>
         </div>
         <div class="slide-topic-box" style="transform:translate(${settings.topicPosX || 0}px, ${settings.topicPosY || 0}px);">
           <div class="slide-topic-title" style="color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px;">
-            ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || 'TOPIC').toUpperCase())}
+            ${activeQ.topicHtml || settings.topicHtml || escapeHtml((activeQ.topic || settings.topic || (isCustomBg ? '' : 'TOPIC')).toUpperCase())}
           </div>
         </div>
       </div>
 
       <!-- Slide Body Area -->
-      <div class="slide-body-content" style="padding:${settings.questionPadding || 16}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%;">
+      <div class="slide-body-content" style="padding:${bodyTopPad}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%;">
         ${(settings.elementOrder || ["qbadge", "english", "divider", "hindi", "exam", "options"]).map((elemKey) => {
           switch (elemKey) {
             case "qbadge":
               return (!settings.showHeader && settings.showQBadge) ? `
                 <div class="slide-standalone-q-badge-box" style="display:inline-flex; align-items:center; margin-bottom:8px; transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px);">
-                  <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || (settings.theme === 'purple' ? '#4C1D95' : (settings.theme === 'navy' ? '#0A1931' : '#7A0000'))}; font-size:${settings.qBadgeSize || 18}px; padding:4px 14px; border-radius:14px; font-weight:800; box-shadow: 0 2px 6px rgba(0,0,0,0.35);">
+                  <div class="slide-q-badge ${isPlainQ ? 'slide-q-no-badge' : ''}" style="background:${qBg}; color:${qTextColor}; font-size:${settings.qBadgeSize || 18}px; padding:${qPad}; border-radius:${qRadius}; font-weight:800; box-shadow:${qShadow};">
                     ${activeQ.numberHtml || escapeHtml(activeQ.number || `Q.${activeIdx + 1}`)}
                   </div>
                 </div>
@@ -592,21 +652,34 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
                 </div>
               ` : "";
             case "exam":
-              return (settings.showExamTag && (examTagPos === 'below-question' || examTagPos === 'above-options')) ? `
-                <div class="slide-exam-section" style="display:inline-flex; transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px);">
-                  <div class="slide-standalone-exam-tag" data-style="${examTagStyle}" style="
-                    background:${examTagStyle === 'pill' ? (settings.examTagBg || '#DC2626') : (examTagStyle === 'highlight' ? '#FEF08A' : 'transparent')};
-                    color:${examTagStyle === 'pill' ? (settings.examTagColor || '#FFFFFF') : (examTagStyle === 'highlight' ? '#854D0E' : (settings.examColor || '#FFFFFF'))};
-                    font-size:${settings.examFontSize || 15}px;
-                    border-radius:${settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === 'pill' ? '18px' : '4px')};
-                    padding:${settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4}px ${settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === 'pill' ? 14 : 6)}px;
-                    font-weight:800;
-                    box-shadow:${examTagStyle === 'pill' ? '0 2px 6px rgba(0,0,0,0.35)' : 'none'};
-                  ">
-                    ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(Exam Name)')}
+              {
+                const isPlainExam = (examTagStyle === "text" || examTagStyle === "none" || examTagStyle === "clean");
+                const defaultBg = (examTagStyle === "highlight" ? "#FEF08A" : (examTagStyle === "blue" ? "#2563EB" : "#DC2626"));
+                const examBg = isPlainExam ? "transparent" : (settings.examTagBg || defaultBg);
+                const examColor = isPlainExam
+                  ? (settings.examTagColor || settings.examColor || "#2563EB")
+                  : (settings.examTagColor || (examTagStyle === "highlight" ? "#854D0E" : "#FFFFFF"));
+                const examRadius = isPlainExam ? "0px" : (settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === "pill" || examTagStyle === "blue" ? "18px" : "4px"));
+                const examPadY = isPlainExam ? 0 : (settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4);
+                const examPadX = isPlainExam ? 4 : (settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === "pill" || examTagStyle === "blue" ? 14 : 6));
+                const examShadow = (isPlainExam || examTagStyle === "highlight" || settings.examTagBg === "transparent") ? "none" : "0 2px 6px rgba(0,0,0,0.35)";
+
+                return (settings.showExamTag && (examTagPos === 'below-question' || examTagPos === 'above-options')) ? `
+                  <div class="slide-exam-section" style="display:inline-flex; transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px);">
+                    <div class="slide-standalone-exam-tag ${isPlainExam ? 'slide-exam-no-badge' : ''}" data-style="${examTagStyle}" style="
+                      background:${examBg};
+                      color:${examColor};
+                      font-size:${settings.examFontSize || 15}px;
+                      border-radius:${examRadius};
+                      padding:${examPadY}px ${examPadX}px;
+                      font-weight:800;
+                      box-shadow:${examShadow};
+                    ">
+                      ${activeQ.examHtml || escapeHtml(activeQ.exam || settings.defaultExam || '(Exam Name)')}
+                    </div>
                   </div>
-                </div>
-              ` : "";
+                ` : "";
+              }
             case "options":
               return (settings.showOptions && activeQ.options && activeQ.options.length > 0) ? `
                 <div class="slide-freeform-box slide-options-container" data-layout="${settings.optionsLayout || '2-col'}" data-option-style="${settings.optionStyle || 'card'}" style="display:grid; width:${settings.optionWidthPercent || 96}%; gap:${settings.optionGap || 10}px; transform:translate(${settings.optionsPosX || 0}px, ${settings.optionsPosY || 0}px);">
@@ -660,7 +733,7 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
       }).join("")}
 
       <!-- Footer Bar -->
-      <div class="slide-footer-bar" style="display:${isBlankSlide || !settings.showFooter ? 'none' : 'flex'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
+      <div class="slide-footer-bar" style="display:${isBlankSlide || !settings.showFooter ? 'none' : 'flex'}; background:${resolvedFooterBg}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px;">
         ${settings.footerHtml || escapeHtml(settings.footerText || '')}
       </div>
           </div>

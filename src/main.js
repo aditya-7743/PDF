@@ -61,6 +61,7 @@ import {
 
 const STORAGE_KEY = "math-equation-authoring-state-v1";
 const UNDO_STACK_LIMIT = 50;
+const isImageToolsApp = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("app") === "image-tools";
 
 const state = loadInitialState();
 const undoStack = [];
@@ -89,6 +90,7 @@ document.addEventListener("keydown", (e) => handlePptSlideNavKeydown(e, state, r
 
 
 function normalizeAppMode(mode = "") {
+  if (isImageToolsApp) return "image-tools";
   if (mode === "equation") return "equation";
   if (mode === "figures" || mode === "drawing" || mode === "math-figures") return "math-figures";
   if (mode === "ppt" || mode === "ppt-builder" || mode === "slides") return "ppt-builder";
@@ -102,7 +104,7 @@ function normalizeImageToolMode(mode = "") {
 
 function loadInitialState() {
   const blankState = {
-    mode: "home",
+    mode: isImageToolsApp ? "image-tools" : "home",
     imageToolMode: "image-pdf",
     input: branches.editor.initialInput,
     history: [],
@@ -170,7 +172,7 @@ function loadInitialState() {
     }
 
     const isFirstTimeHome = !parsed.hasSeenHomeV1;
-    const initialMode = isFirstTimeHome ? "home" : normalizeAppMode(parsed.mode || "home");
+    const initialMode = isImageToolsApp ? "image-tools" : (isFirstTimeHome ? "home" : normalizeAppMode(parsed.mode || "home"));
 
     return {
       ...blankState,
@@ -377,6 +379,7 @@ function handleAction(event) {
   const action = node.dataset.action;
 
   if (action === "switch-mode" || action === "set-mode") {
+    if (isImageToolsApp) return;
     const targetMode = normalizeAppMode(node.dataset.mode || node.dataset.setMode);
     if (state.mode !== targetMode) {
       recordUndo();

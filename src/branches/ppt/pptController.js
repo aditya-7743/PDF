@@ -791,6 +791,7 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       }
       break;
     }
+    case "ppt-apply-text-only-template":
     case "ppt-unselect-theme": {
       recordUndo();
       const isCurrentScope = (ppt.applyScope === "current");
@@ -800,6 +801,8 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       targetObj.showHeader = false;
       targetObj.showFooter = false;
       targetObj.showDivider = false;
+      targetObj.headerBg = "transparent";
+      targetObj.footerBg = "transparent";
       targetObj.showQBadge = true;
       targetObj.showEnglish = true;
       targetObj.showHindi = true;
@@ -813,10 +816,16 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       if (!isCurrentScope) {
         ppt.questions.forEach((q) => {
           if (q.settings) {
+            q.settings.isCustomTemplateMode = true;
             q.settings.showHeader = false;
             q.settings.showFooter = false;
             q.settings.showDivider = false;
+            q.settings.headerBg = "transparent";
+            q.settings.footerBg = "transparent";
             q.settings.optionStyle = "clean";
+            if (q.settings.examTagPosition === "header") {
+              q.settings.examTagPosition = "below-question";
+            }
           }
         });
       }
@@ -1211,16 +1220,126 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       recordUndo();
       const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
       targetObj.examTagStyle = style;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.examTagStyle = style;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-set-qbadge-style": {
+      const style = target.dataset.style || "pill";
+      recordUndo();
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.qBadgeStyle = style;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.qBadgeStyle = style;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-qbadge-style": {
+      recordUndo();
+      const eff = getSlideSettings(ppt.settings, activeQ);
+      const isPlain = (eff.qBadgeStyle === "text" || eff.qBadgeStyle === "none" || eff.qBadgeStyle === "clean");
+      const nextStyle = isPlain ? "pill" : "text";
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.qBadgeStyle = nextStyle;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.qBadgeStyle = nextStyle;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-exam-style": {
+      recordUndo();
+      const eff = getSlideSettings(ppt.settings, activeQ);
+      const isPlain = (eff.examTagStyle === "text" || eff.examTagStyle === "none");
+      const nextStyle = isPlain ? "pill" : "text";
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.examTagStyle = nextStyle;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.examTagStyle = nextStyle;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-qbadge-transparent": {
+      recordUndo();
+      const eff = getSlideSettings(ppt.settings, activeQ);
+      const isTrans = (eff.qBadgeBg === "transparent");
+      const nextBg = isTrans ? "#FFFFFF" : "transparent";
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.qBadgeBg = nextBg;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.qBadgeBg = nextBg;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-examtag-transparent": {
+      recordUndo();
+      const eff = getSlideSettings(ppt.settings, activeQ);
+      const isTrans = (eff.examTagBg === "transparent");
+      const defaultBg = eff.examTagStyle === "blue" ? "#2563EB" : (eff.examTagStyle === "highlight" ? "#FEF08A" : "#DC2626");
+      const nextBg = isTrans ? defaultBg : "transparent";
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.examTagBg = nextBg;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.examTagBg = nextBg;
+        });
+      }
+      saveState(state);
       render();
       break;
     }
     case "ppt-reset-positions": {
       recordUndo();
-      if (isCurrentScope && activeQ && activeQ.settings) {
-        delete activeQ.settings;
-      } else {
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      targetObj.boxPosX = 0;
+      targetObj.boxPosY = 0;
+      targetObj.questionBoxWidth = 100;
+      targetObj.layoutPreset = "standard";
+      targetObj.engPosX = 0;
+      targetObj.engPosY = 0;
+      targetObj.engWidth = 100;
+      targetObj.hindiPosX = 0;
+      targetObj.hindiPosY = 0;
+      targetObj.hindiWidth = 100;
+      targetObj.topicPosX = 0;
+      targetObj.topicPosY = 0;
+      targetObj.dividerPosX = 0;
+      targetObj.dividerWidth = 100;
+      targetObj.examTagPosX = 0;
+      targetObj.examTagPosY = 0;
+      targetObj.qBadgePosX = 0;
+      targetObj.qBadgePosY = 0;
+      targetObj.optionsPosX = 0;
+      targetObj.optionsPosY = 0;
+      targetObj.optionWidthPercent = 96;
+      if (activeQ) activeQ.layout = "standard";
+      if (!isCurrentScope) {
         ppt.settings.boxPosX = 0;
         ppt.settings.boxPosY = 0;
+        ppt.settings.questionBoxWidth = 100;
+        ppt.settings.layoutPreset = "standard";
         ppt.settings.engPosX = 0;
         ppt.settings.engPosY = 0;
         ppt.settings.engWidth = 100;
@@ -1233,10 +1352,33 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
         ppt.settings.dividerWidth = 100;
         ppt.settings.examTagPosX = 0;
         ppt.settings.examTagPosY = 0;
+        ppt.settings.qBadgePosX = 0;
+        ppt.settings.qBadgePosY = 0;
         ppt.settings.optionsPosX = 0;
         ppt.settings.optionsPosY = 0;
         ppt.settings.optionWidthPercent = 96;
+        ppt.questions.forEach((q) => {
+          q.layout = "standard";
+          if (q.settings) {
+            delete q.settings.boxPosX;
+            delete q.settings.boxPosY;
+            delete q.settings.questionBoxWidth;
+            delete q.settings.layoutPreset;
+            delete q.settings.engPosX;
+            delete q.settings.engPosY;
+            delete q.settings.hindiPosX;
+            delete q.settings.hindiPosY;
+            delete q.settings.dividerPosX;
+            delete q.settings.examTagPosX;
+            delete q.settings.examTagPosY;
+            delete q.settings.qBadgePosX;
+            delete q.settings.qBadgePosY;
+            delete q.settings.optionsPosX;
+            delete q.settings.optionsPosY;
+          }
+        });
       }
+      saveState(state);
       render();
       break;
     }
@@ -1690,17 +1832,28 @@ Ans: C (SSC GD 2024 Shift 2)`;
             const reader = new FileReader();
             reader.onload = (re) => {
               recordUndo();
+              const dataUrl = re.target.result;
               if (state.ppt.applyScope === "current") {
                 if (activeQ) {
                   activeQ.bgImage = dataUrl;
                   activeQ.settings = activeQ.settings || {};
                   activeQ.settings.bgImage = dataUrl;
+                  activeQ.settings.isCustomTemplateMode = true;
+                  activeQ.settings.headerBg = "transparent";
+                  activeQ.settings.footerBg = "transparent";
                 }
               } else {
                 state.ppt.settings.bgImage = dataUrl;
+                state.ppt.settings.isCustomTemplateMode = true;
+                state.ppt.settings.headerBg = "transparent";
+                state.ppt.settings.footerBg = "transparent";
                 state.ppt.questions.forEach((q) => {
                   q.bgImage = dataUrl;
-                  if (q.settings) q.settings.bgImage = dataUrl;
+                  q.settings = q.settings || {};
+                  q.settings.bgImage = dataUrl;
+                  q.settings.isCustomTemplateMode = true;
+                  q.settings.headerBg = "transparent";
+                  q.settings.footerBg = "transparent";
                 });
               }
               saveState(state);
@@ -1725,13 +1878,24 @@ Ans: C (SSC GD 2024 Shift 2)`;
           if (state.ppt.applyScope === "current") {
             if (activeQ) {
               activeQ.bgImage = dataUrl;
-              if (activeQ.settings) activeQ.settings.bgImage = dataUrl;
+              activeQ.settings = activeQ.settings || {};
+              activeQ.settings.bgImage = dataUrl;
+              activeQ.settings.isCustomTemplateMode = true;
+              activeQ.settings.headerBg = "transparent";
+              activeQ.settings.footerBg = "transparent";
             }
           } else {
             state.ppt.settings.bgImage = dataUrl;
+            state.ppt.settings.isCustomTemplateMode = true;
+            state.ppt.settings.headerBg = "transparent";
+            state.ppt.settings.footerBg = "transparent";
             state.ppt.questions.forEach((q) => {
               q.bgImage = dataUrl;
-              if (q.settings) q.settings.bgImage = dataUrl;
+              q.settings = q.settings || {};
+              q.settings.bgImage = dataUrl;
+              q.settings.isCustomTemplateMode = true;
+              q.settings.headerBg = "transparent";
+              q.settings.footerBg = "transparent";
             });
           }
           saveState(state);
@@ -1743,16 +1907,72 @@ Ans: C (SSC GD 2024 Shift 2)`;
     }
     case "ppt-clear-bg-image": {
       recordUndo();
-      if (state.ppt.applyScope === "current") {
+      const isCurrentScope = (state.ppt.applyScope === "current");
+      const activeQ = state.ppt.questions[state.ppt.activeQuestionIndex];
+      const curThemeKey = (activeQ?.settings?.theme) || state.ppt.settings.theme || "maroon";
+      const themeColors = pptThemes[curThemeKey] || pptThemes.maroon;
+
+      if (isCurrentScope) {
         if (activeQ) {
           delete activeQ.bgImage;
-          if (activeQ.settings) delete activeQ.settings.bgImage;
+          if (activeQ.settings) {
+            delete activeQ.settings.bgImage;
+            delete activeQ.settings.isCustomTemplateMode;
+            if (activeQ.settings.headerBg === "transparent") activeQ.settings.headerBg = themeColors.headerBg || "#7A0000";
+            if (activeQ.settings.footerBg === "transparent") activeQ.settings.footerBg = themeColors.footerBg || "#7A0000";
+          }
         }
       } else {
         delete state.ppt.settings.bgImage;
+        delete state.ppt.settings.isCustomTemplateMode;
+        if (state.ppt.settings.headerBg === "transparent") state.ppt.settings.headerBg = themeColors.headerBg || "#7A0000";
+        if (state.ppt.settings.footerBg === "transparent") state.ppt.settings.footerBg = themeColors.footerBg || "#7A0000";
         state.ppt.questions.forEach((q) => {
           delete q.bgImage;
-          if (q.settings) delete q.settings.bgImage;
+          if (q.settings) {
+            delete q.settings.bgImage;
+            delete q.settings.isCustomTemplateMode;
+            if (q.settings.headerBg === "transparent") q.settings.headerBg = themeColors.headerBg || "#7A0000";
+            if (q.settings.footerBg === "transparent") q.settings.footerBg = themeColors.footerBg || "#7A0000";
+          }
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-header-transparent": {
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      const curTheme = targetObj.theme || ppt.settings.theme || "maroon";
+      const fallbackColor = pptThemes[curTheme]?.headerBg || "#7A0000";
+      const isTrans = (targetObj.headerBg === "transparent");
+      const newBg = isTrans ? fallbackColor : "transparent";
+      targetObj.headerBg = newBg;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.headerBg = newBg;
+        });
+      }
+      saveState(state);
+      render();
+      break;
+    }
+    case "ppt-toggle-footer-transparent": {
+      recordUndo();
+      const isCurrentScope = (ppt.applyScope === "current");
+      const activeQ = ppt.questions[ppt.activeQuestionIndex];
+      const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
+      const curTheme = targetObj.theme || ppt.settings.theme || "maroon";
+      const fallbackColor = pptThemes[curTheme]?.footerBg || "#7A0000";
+      const isTrans = (targetObj.footerBg === "transparent");
+      const newBg = isTrans ? fallbackColor : "transparent";
+      targetObj.footerBg = newBg;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings) q.settings.footerBg = newBg;
         });
       }
       saveState(state);
@@ -2169,8 +2389,12 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
     if (e.target.closest(".canva-handle") || e.target.closest(".slide-image-delete-btn")) {
       return false;
     }
+    // Prevent accidental drags when interacting with text / editable elements
+    if (e.target.isContentEditable || e.target.closest("[contenteditable='true']") || e.target.closest(".slide-eng-text") || e.target.closest(".slide-hindi-text") || e.target.closest(".slide-opt-text") || e.target.closest(".slide-topic-title") || e.target.closest(".slide-exam-title") || e.target.closest(".slide-q-badge") || e.target.closest(".slide-standalone-exam-tag")) {
+      return false;
+    }
     const rect = box.getBoundingClientRect();
-    const borderMargin = 10; // 10px grab zone around the bounding box
+    const borderMargin = 6;
     const x = e.clientX;
     const y = e.clientY;
     const nearTop = Math.abs(y - rect.top) <= borderMargin;
@@ -2294,10 +2518,10 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
         if (isMultiToggle) {
           box.classList.toggle("is-selected");
         } else {
-          if (!box.classList.contains("is-selected")) {
-            resizableBoxes.forEach((b) => b.classList.remove("is-selected"));
-            box.classList.add("is-selected");
-          }
+          resizableBoxes.forEach((b) => {
+            if (b !== box) b.classList.remove("is-selected");
+          });
+          box.classList.add("is-selected");
         }
 
         const onBorder = isImage || isEventOnBorderOrPill(e, box);
@@ -2359,7 +2583,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           const rawDeltaY = moveEvt.clientY - startY;
 
           if (!hasMoved) {
-            if (Math.abs(rawDeltaX) > 2 || Math.abs(rawDeltaY) > 2) {
+            if (Math.abs(rawDeltaX) > 6 || Math.abs(rawDeltaY) > 6) {
               hasMoved = true;
             } else {
               return;

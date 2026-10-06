@@ -20,19 +20,30 @@ export async function createImagePdfBlob(items, options = {}, onProgress = () =>
   const pages = [];
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    onProgress({ index, total: items.length, label: item.name || `Image ${index + 1}` });
+    await onProgress({ index, total: items.length, label: item.name || `Image ${index + 1}` });
     const image = await loadImage(item.url);
     const rotation = normalizeRotation(item.rotation || 0);
     const page = resolvePageSize(image, options, rotation);
     const canvas = renderImagePage(image, page, options, rotation);
+    const imageWidth = canvas.width;
+    const imageHeight = canvas.height;
     const bytes = await canvasToJpegBytes(canvas, normalizeQuality(options.quality));
+
+    // Release canvas backing raster and decoded image memory immediately
+    canvas.width = 1;
+    canvas.height = 1;
+    image.src = "";
+
     pages.push({
       width: page.width,
       height: page.height,
-      imageWidth: canvas.width,
-      imageHeight: canvas.height,
+      imageWidth,
+      imageHeight,
       bytes,
     });
+
+    // Yield to event loop to keep UI responsive and allow GC
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   return buildPdf(pages);

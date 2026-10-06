@@ -11,10 +11,11 @@ export function renderApp(state) {
   const rendered = renderMathMl(state.input);
   const diagnostics = getEquationDiagnostics(state.input);
   const mode = normalizeAppMode(state.mode);
-  const showTopbar = mode !== "home" && mode !== "ppt-builder";
+  const isImageToolsApp = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("app") === "image-tools";
+  const showTopbar = !isImageToolsApp && mode !== "home" && mode !== "ppt-builder";
 
   return `
-    <div class="app-shell${mode === "home" ? " is-home-shell" : ""}${mode === "ppt-builder" ? " is-ppt-shell" : ""}">
+    <div class="app-shell${mode === "home" ? " is-home-shell" : ""}${mode === "ppt-builder" ? " is-ppt-shell" : ""}${isImageToolsApp ? " is-image-tools-shell" : ""}">
       ${showTopbar ? renderTopbar(state) : ""}
       ${renderWorkbench(state, rendered, diagnostics)}
     </div>
@@ -144,6 +145,7 @@ function renderImagePdfPanel() {
           </div>
           <div class="image-pdf-actions">
             <button class="image-pdf-secondary" data-image-pdf-clear type="button">Clear</button>
+            <button class="image-pdf-secondary" data-image-pdf-preview-all type="button" title="Preview generated PDF">Preview PDF</button>
             <button class="image-pdf-primary" data-image-pdf-convert type="button">Download PDF</button>
           </div>
         </div>

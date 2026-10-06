@@ -26,6 +26,15 @@ export function renderThumbnailSlideHtml(q, settings, idx) {
     ? `background-image: url('${bgImgUrl}'); background-position: center; background-size: ${bgSize}; background-repeat: no-repeat; background-color: ${slideBgColor};`
     : `background-color: ${slideBgColor};`;
 
+  const isCustomBg = Boolean(bgImgUrl);
+  const resolvedHeaderBg = (settings.headerBg === "transparent" || (isCustomBg && (settings.headerBg === "transparent" || settings.isCustomTemplateMode || !settings.headerBg || settings.headerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.headerBg || "#7A0000");
+
+  const resolvedFooterBg = (settings.footerBg === "transparent" || (isCustomBg && (settings.footerBg === "transparent" || settings.isCustomTemplateMode || !settings.footerBg || settings.footerBg === "#7A0000")))
+    ? "transparent"
+    : (settings.footerBg || "#7A0000");
+  const bodyTopPad = (!settings.showHeader && isCustomBg) ? Math.max(settings.questionPadding || 16, Number(settings.headerHeight) || 64) : (settings.questionPadding || 16);
 
   const examTagPos = settings.examTagPosition || "below-question";
   const examTagStyle = settings.examTagStyle || "pill";
@@ -63,28 +72,45 @@ export function renderThumbnailSlideHtml(q, settings, idx) {
   }
 
 
+  const isPlainQ = (settings.qBadgeStyle === "text" || settings.qBadgeStyle === "none" || settings.qBadgeStyle === "clean");
+  const qBg = isPlainQ ? "transparent" : (settings.qBadgeBg || "#FFFFFF");
+  const qPad = isPlainQ ? "0px 4px" : (settings.qBadgeStyle === "box" ? "4px 10px" : "4px 14px");
+  const qRadius = isPlainQ ? "0px" : (settings.qBadgeStyle === "box" ? "6px" : (settings.qBadgeRadius !== undefined ? `${settings.qBadgeRadius}px` : "14px"));
+  const defaultQColor = settings.theme === "purple" ? "#4C1D95" : (settings.theme === "navy" ? "#0A1931" : "#7A0000");
+  const qTextColor = settings.qBadgeColor || (isPlainQ ? (settings.hindiColor || settings.engColor || defaultQColor) : defaultQColor);
+
+  const isPlainExam = (examTagStyle === "text" || examTagStyle === "none" || examTagStyle === "clean");
+  const defaultExamBg = (examTagStyle === "highlight" ? "#FEF08A" : (examTagStyle === "blue" ? "#2563EB" : "#DC2626"));
+  const examBg = isPlainExam ? "transparent" : (settings.examTagBg || defaultExamBg);
+  const examColor = isPlainExam
+    ? (settings.examTagColor || settings.examColor || "#2563EB")
+    : (settings.examTagColor || (examTagStyle === "highlight" ? "#854D0E" : "#FFFFFF"));
+  const examRadius = isPlainExam ? "0px" : (settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === "pill" || examTagStyle === "blue" ? "18px" : "4px"));
+  const examPadY = isPlainExam ? 0 : (settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4);
+  const examPadX = isPlainExam ? 4 : (settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === "pill" || examTagStyle === "blue" ? 14 : 6));
+
   return `
     <div class="ppt-slide-canvas-wrapper" style="${bgStyle} position:relative; width:960px; height:540px; overflow:hidden; display:flex; flex-direction:column;">
       <!-- Header -->
-      <div class="slide-header-bar" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${settings.headerBg || '#7A0000'}; height:${settings.headerHeight || 64}px;">
+      <div class="slide-header-bar" style="display:${settings.showHeader ? 'flex' : 'none'}; background:${resolvedHeaderBg}; height:${settings.headerHeight || 64}px;">
         <div style="transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px); display:${settings.showQBadge ? 'inline-flex' : 'none'}; align-items:center;">
-          <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || '#7A0000'}; font-size:${settings.qBadgeSize || 18}px;">
+          <div class="slide-q-badge ${isPlainQ ? 'slide-q-no-badge' : ''}" style="background:${qBg}; color:${qTextColor}; font-size:${settings.qBadgeSize || 18}px; padding:${qPad}; border-radius:${qRadius};">
             ${escapeHtml(q.number || `Q.${idx + 1}`)}
           </div>
         </div>
-        <div class="slide-exam-title" style="transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px); color:${settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px; display:${settings.showExamTag && examTagPos === 'header' ? 'inline-block' : 'none'};">
+        <div class="slide-exam-title" style="transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px); color:${settings.examTagColor || settings.examColor || '#FFFFFF'}; font-size:${settings.examFontSize || 19}px; display:${settings.showExamTag && examTagPos === 'header' ? 'inline-block' : 'none'};">
           ${escapeHtml(q.exam || settings.defaultExam || '(Exam Name)')}
         </div>
         <div class="slide-topic-title" style="transform:translate(${settings.topicPosX || 0}px, ${settings.topicPosY || 0}px); color:${settings.topicColor || '#FFD700'}; font-size:${settings.topicFontSize || 20}px; font-weight:bold;">
-          ${escapeHtml((q.topic || settings.topic || 'TOPIC').toUpperCase())}
+          ${escapeHtml((q.topic || settings.topic || (isCustomBg ? '' : 'TOPIC')).toUpperCase())}
         </div>
       </div>
 
       <!-- Body Content -->
-      <div class="slide-body-content" style="padding:${settings.questionPadding || 16}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%; flex:1; display:flex; flex-direction:column;">
+      <div class="slide-body-content" style="padding:${bodyTopPad}px 24px; transform:translate(${posXPercent}%, ${settings.boxPosY || 0}px); width:${widthPercent}%; flex:1; display:flex; flex-direction:column;">
         <!-- Standalone Q Badge when Header is Hidden -->
         <div style="display:${!settings.showHeader && settings.showQBadge ? 'inline-flex' : 'none'}; align-items:center; margin-bottom:8px; transform:translate(${settings.qBadgePosX || 0}px, ${settings.qBadgePosY || 0}px);">
-          <div class="slide-q-badge" style="background:${settings.qBadgeBg || '#FFFFFF'}; color:${settings.qBadgeColor || (settings.theme === 'purple' ? '#4C1D95' : (settings.theme === 'navy' ? '#0A1931' : '#7A0000'))}; font-size:${settings.qBadgeSize || 16}px; padding:4px 14px; border-radius:14px; font-weight:700;">
+          <div class="slide-q-badge ${isPlainQ ? 'slide-q-no-badge' : ''}" style="background:${qBg}; color:${qTextColor}; font-size:${settings.qBadgeSize || 16}px; padding:${qPad}; border-radius:${qRadius}; font-weight:700;">
             ${escapeHtml(q.number || `Q.${idx + 1}`)}
           </div>
         </div>
@@ -111,14 +137,13 @@ export function renderThumbnailSlideHtml(q, settings, idx) {
 
         <!-- Standalone Exam Tag -->
         <div style="display:${settings.showExamTag && (examTagPos === 'below-question' || examTagPos === 'above-options') ? 'inline-flex' : 'none'}; transform:translate(${settings.examTagPosX || 0}px, ${settings.examTagPosY || 0}px); margin:6px 0 8px 0;">
-          <div class="slide-standalone-exam-tag" data-style="${examTagStyle}" style="
-            background:${examTagStyle === 'pill' ? (settings.examTagBg || '#DC2626') : (examTagStyle === 'highlight' ? '#FEF08A' : 'transparent')};
-            color:${examTagStyle === 'pill' ? (settings.examTagColor || '#FFFFFF') : (examTagStyle === 'highlight' ? '#854D0E' : (settings.examColor || '#FFFFFF'))};
+          <div class="slide-standalone-exam-tag ${isPlainExam ? 'slide-exam-no-badge' : ''}" data-style="${examTagStyle}" style="
+            background:${examBg};
+            color:${examColor};
             font-size:${settings.examFontSize || 15}px;
-            padding:${settings.examTagPaddingY !== undefined ? settings.examTagPaddingY : 4}px ${settings.examTagPaddingX !== undefined ? settings.examTagPaddingX : (examTagStyle === 'pill' ? 14 : 6)}px;
-            border-radius:${settings.examTagRadius !== undefined ? `${settings.examTagRadius}px` : (examTagStyle === 'pill' ? '18px' : '4px')};
+            padding:${examPadY}px ${examPadX}px;
+            border-radius:${examRadius};
             font-weight:800;
-
           ">
             ${escapeHtml(q.exam || settings.defaultExam || '(Exam Name)')}
           </div>
@@ -159,7 +184,7 @@ export function renderThumbnailSlideHtml(q, settings, idx) {
 
 
       <!-- Footer Bar -->
-      <div class="slide-footer-bar" style="display:${settings.showFooter && !isBlank ? 'flex' : 'none'}; background:${settings.footerBg || '#7A0000'}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px; align-items:center; justify-content:center; flex-shrink:0; margin-top:auto;">
+      <div class="slide-footer-bar" style="display:${settings.showFooter && !isBlank ? 'flex' : 'none'}; background:${resolvedFooterBg}; color:${settings.footerColor || '#FFFFFF'}; height:${settings.footerHeight || 28}px; font-size:${settings.footerFontSize || 13}px; align-items:center; justify-content:center; flex-shrink:0; margin-top:auto;">
         ${escapeHtml(settings.footerText || '')}
       </div>
     </div>

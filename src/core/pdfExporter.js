@@ -194,8 +194,10 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
   const showHeader = settings.showHeader !== false;
   const headerH = showHeader ? Math.round((settings.headerHeight || 64) * scale) : 0;
   if (showHeader) {
-    ctx.fillStyle = settings.headerBg || "#7A0000";
-    ctx.fillRect(0, 0, W, headerH);
+    if (settings.headerBg && settings.headerBg !== "transparent") {
+      ctx.fillStyle = settings.headerBg;
+      ctx.fillRect(0, 0, W, headerH);
+    }
 
     // 1a. Q. Badge in Header
     const showQBadge = settings.showQBadge !== false;
@@ -540,9 +542,10 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
   // 5. Footer Bar (Render whenever showFooter is true)
   if (settings.showFooter !== false) {
     const footerH = (settings.footerHeight || 28) * scale;
-    const footY = H - footerH;
-    ctx.fillStyle = settings.footerBg || "#FFFFFF";
-    ctx.fillRect(0, footY, W, footerH);
+    if (settings.footerBg && settings.footerBg !== "transparent") {
+      ctx.fillStyle = settings.footerBg;
+      ctx.fillRect(0, footY, W, footerH);
+    }
 
     ctx.fillStyle = settings.footerColor || "#111111";
     ctx.font = `bold ${Math.round((settings.footerFontSize || 13) * scale)}px "Segoe UI", Arial, sans-serif`;

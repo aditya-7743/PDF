@@ -101,14 +101,16 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
     const headerH = showHeader ? ((settings.headerHeight || 56) / 72) : 0; // convert px to inches approx ~0.8in
 
     if (showHeader) {
-      slide.addShape(pptx.shapes.RECTANGLE, {
-        x: 0,
-        y: 0,
-        w: SLIDE_W,
-        h: headerH,
-        fill: { color: cleanHex(settings.headerBg || "#7A0000") },
-        line: { type: "none" }
-      });
+      if (settings.headerBg && settings.headerBg !== "transparent") {
+        slide.addShape(pptx.shapes.RECTANGLE, {
+          x: 0,
+          y: 0,
+          w: SLIDE_W,
+          h: headerH,
+          fill: { color: cleanHex(settings.headerBg) },
+          line: { type: "none" }
+        });
+      }
 
       // 1a. Q. Badge in Header
       if (settings.showQBadge !== false) {
@@ -524,14 +526,16 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
     if (settings.showFooter !== false) {
       const footerH = (settings.footerHeight || 28) / 72;
       const footY = SLIDE_H - footerH;
-      slide.addShape(pptx.shapes.RECTANGLE, {
-        x: 0,
-        y: footY,
-        w: SLIDE_W,
-        h: footerH,
-        fill: { color: cleanHex(settings.footerBg || "#FFFFFF") },
-        line: { type: "none" }
-      });
+      if (settings.footerBg && settings.footerBg !== "transparent") {
+        slide.addShape(pptx.shapes.RECTANGLE, {
+          x: 0,
+          y: footY,
+          w: SLIDE_W,
+          h: footerH,
+          fill: { color: cleanHex(settings.footerBg) },
+          line: { type: "none" }
+        });
+      }
 
       slide.addText(settings.footerText || "Maths by Aditya | Telegram: @YourChannel", {
         x: 0,
