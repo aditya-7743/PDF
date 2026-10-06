@@ -645,10 +645,19 @@ export function handlePptToolbarAction(action, app, state, recordUndo, saveState
     } else {
       targetObj.textAlign = align;
     }
+    if (!isCurrentScope) {
+      state.ppt.questions.forEach((q) => {
+        if (q.settings) {
+          if (targetType === "options") delete q.settings.optionAlign;
+          else delete q.settings.textAlign;
+        }
+      });
+    }
     if (lastFocusedPptCanvasTarget && document.contains(lastFocusedPptCanvasTarget) && lastFocusedPptCanvasTarget.isContentEditable) {
       document.execCommand(align === "left" ? "justifyLeft" : align === "center" ? "justifyCenter" : align === "right" ? "justifyRight" : "justifyFull");
     }
     updateLiveCanvasSlide(app, state, saveState);
+    if (typeof saveState === "function") saveState(state);
     if (render) render();
   } else if (action === "valign-top" || action === "valign-middle" || action === "valign-bottom") {
     const valign = action.replace("valign-", "");
@@ -657,7 +666,16 @@ export function handlePptToolbarAction(action, app, state, recordUndo, saveState
     } else {
       targetObj.valign = valign;
     }
+    if (!isCurrentScope) {
+      state.ppt.questions.forEach((q) => {
+        if (q.settings) {
+          if (targetType === "options") delete q.settings.optValign;
+          else delete q.settings.valign;
+        }
+      });
+    }
     updateLiveCanvasSlide(app, state, saveState);
+    if (typeof saveState === "function") saveState(state);
     if (render) render();
   } else if (action === "bullet-list") {
     const input = lastFocusedPptCanvasTarget || lastFocusedPptInput || app.querySelector('[data-ppt-q-field="english"]');
@@ -1124,6 +1142,14 @@ export function handlePptAction(action, target, app, state, render, recordUndo, 
       recordUndo();
       const targetObj = (isCurrentScope && activeQ) ? (activeQ.settings = activeQ.settings || {}) : ppt.settings;
       targetObj.optionStyle = style;
+      if (!isCurrentScope) {
+        ppt.questions.forEach((q) => {
+          if (q.settings && q.settings.optionStyle) {
+            delete q.settings.optionStyle;
+          }
+        });
+      }
+      saveState(state);
       render();
       break;
     }
@@ -1567,6 +1593,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
     case "ppt-prev-slide": {
       if (ppt.activeQuestionIndex > 0) {
         ppt.activeQuestionIndex -= 1;
+        saveState(state);
         render();
       }
       break;
@@ -1574,6 +1601,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
     case "ppt-next-slide": {
       if (ppt.activeQuestionIndex < ppt.questions.length - 1) {
         ppt.activeQuestionIndex += 1;
+        saveState(state);
         render();
       }
       break;
@@ -1609,6 +1637,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
       if (!isNaN(idx)) {
         recordUndo();
         ppt.activeQuestionIndex = Math.max(0, Math.min(idx, ppt.questions.length - 1));
+        saveState(state);
         render();
       }
       break;
@@ -1704,6 +1733,7 @@ Ans: C (SSC GD 2024 Shift 2)`;
         recordUndo();
         ppt.questions.splice(ppt.activeQuestionIndex, 1);
         ppt.activeQuestionIndex = Math.max(0, Math.min(ppt.activeQuestionIndex, ppt.questions.length - 1));
+        saveState(state);
         render();
       }
       break;
@@ -2575,6 +2605,12 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
               delete activeQ.settings[key];
               if (Object.keys(activeQ.settings).length === 0) delete activeQ.settings;
             }
+            state.ppt.questions.forEach((q) => {
+              if (q.settings && key in q.settings) {
+                delete q.settings[key];
+                if (Object.keys(q.settings).length === 0) delete q.settings;
+              }
+            });
           }
         }
 
@@ -2635,6 +2671,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
             recordUndo();
             syncCustomizerSliders(app, state);
             updateLiveCanvasSlide(app, state, saveState);
+            if (typeof saveState === "function") saveState(state);
           } else if (isImage) {
             const imgId = box.dataset.imageId;
             const now = Date.now();
@@ -2882,6 +2919,7 @@ export function initCanvasResizeHandles(app, state, recordUndo, saveState, rende
           recordUndo();
           syncCustomizerSliders(app, state);
           updateLiveCanvasSlide(app, state, saveState);
+          if (typeof saveState === "function") saveState(state);
         }
 
         document.addEventListener("mousemove", onMouseMove);
@@ -3043,13 +3081,20 @@ export function updateLiveCanvasSlide(app, state, saveState) {
         : (settings.layoutPreset === "right-split" || settings.layoutPreset === "left-split" ? 56 : 100);
       bodyArea.style.transform = `translate(${posX}%, ${settings.boxPosY || 0}px)`;
       bodyArea.style.width = `${boxW}%`;
-      bodyArea.style.padding = `${settings.questionPadding || 16}px 24px`;
+      const isCustomBg = Boolean(activeQ.bgImage || (activeQ.settings && activeQ.settings.bgImage) || settings.bgImage);
+      const bodyTopPad = settings.questionPadding !== undefined
+        ? Number(settings.questionPadding)
+        : ((!settings.showHeader && isCustomBg) ? Math.max(16, Number(settings.headerHeight) || 64) : 16);
+      bodyArea.style.padding = `${bodyTopPad}px 24px`;
     }
+
+    const vAlignVal = (settings.valign === "middle" || settings.valign === "center") ? "center" : (settings.valign === "bottom" ? "flex-end" : "flex-start");
 
     // English Text Section with Transform & Width
     const engSection = canvasWrapper.querySelector(".slide-eng-section");
     if (engSection) {
       engSection.style.display = settings.showEnglish ? "flex" : "none";
+      engSection.style.justifyContent = vAlignVal;
       engSection.style.transform = `translate(${settings.engPosX || 0}px, ${settings.engPosY || 0}px)`;
       engSection.style.width = settings.engWidth ? `${settings.engWidth}%` : "100%";
     }
@@ -3086,6 +3131,7 @@ export function updateLiveCanvasSlide(app, state, saveState) {
     const hindiSection = canvasWrapper.querySelector(".slide-hindi-section");
     if (hindiSection) {
       hindiSection.style.display = settings.showHindi ? "flex" : "none";
+      hindiSection.style.justifyContent = vAlignVal;
       hindiSection.style.transform = `translate(${settings.hindiPosX || 0}px, ${settings.hindiPosY || 0}px)`;
       hindiSection.style.width = settings.hindiWidth ? `${settings.hindiWidth}%` : "100%";
     }
@@ -3146,12 +3192,14 @@ export function updateLiveCanvasSlide(app, state, saveState) {
       const optionBoxes = optContainer.querySelectorAll(".slide-option-box");
       optionBoxes.forEach((box, idx) => {
         const opt = activeQ.options?.[idx] || { key: String.fromCharCode(65 + idx), text: "" };
-        if (settings.optionStyle === "clean") {
+        if (settings.optionStyle === "clean" || settings.optionStyle === "badge-only") {
           box.style.background = "transparent";
           box.style.border = "none";
+          box.style.boxShadow = "none";
         } else {
           box.style.background = settings.optionCardBg || "#FFFFFF";
           box.style.border = `${settings.optionCardBorderWidth ?? 1.5}px solid ${settings.optionBorderColor || "#CBD5E1"}`;
+          box.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
         }
         box.style.borderRadius = `${settings.optionCardRadius || 8}px`;
         box.style.padding = `${settings.optionCardPadding || 8}px 14px`;
@@ -3162,16 +3210,22 @@ export function updateLiveCanvasSlide(app, state, saveState) {
             circle.style.background = "transparent";
             circle.style.color = settings.optionTextColor || settings.hindiColor || "#FBBF24";
             circle.textContent = `(${(opt.key || String.fromCharCode(65 + idx)).toLowerCase()})`;
+            circle.style.borderRadius = "0";
+            circle.style.width = "auto";
+            circle.style.height = "auto";
           } else {
             circle.style.background = settings.optionBadgeBg || "#7A0000";
             circle.style.color = settings.optionBadgeColor || "#FFFFFF";
             circle.textContent = opt.key || String.fromCharCode(65 + idx);
+            circle.style.borderRadius = "50%";
+            circle.style.width = "28px";
+            circle.style.height = "28px";
           }
         }
 
         const textEl = box.querySelector(".slide-opt-text");
         if (textEl) {
-          textEl.style.color = settings.optionTextColor || (settings.optionStyle === "clean" && settings.theme === "dark" ? "#FFFFFF" : "#111111");
+          textEl.style.color = settings.optionTextColor || (settings.theme === "dark" ? "#FFFFFF" : "#111111");
           textEl.style.fontSize = `${settings.optionFontSize || 18}px`;
           textEl.style.fontFamily = settings.optionFontFamily || settings.engFontFamily || "Segoe UI, Arial, sans-serif";
           textEl.style.textAlign = settings.optionAlign || "left";

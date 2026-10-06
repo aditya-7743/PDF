@@ -157,15 +157,16 @@ function renderCanvasOptions(settings, activeQ) {
 
       ${optionsList.slice(0, 4).map((opt, oIdx) => `
         <div class="slide-option-box" style="
-          background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionCardBg || '#FFFFFF')};
-          border:${settings.optionStyle === 'clean' ? 'none' : `${settings.optionCardBorderWidth || 1.5}px solid ${settings.optionBorderColor || '#CBD5E1'}`};
+          background:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'transparent' : (settings.optionCardBg || '#FFFFFF')};
+          border:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'none' : `${settings.optionCardBorderWidth || 1.5}px solid ${settings.optionBorderColor || '#CBD5E1'}`};
+          box-shadow:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'none' : '0 2px 4px rgba(0,0,0,0.05)'};
           border-radius:${settings.optionCardRadius || 8}px;
           padding:${settings.optionCardPadding || 8}px 14px;
         ">
           <div class="slide-opt-circle" style="background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionBadgeBg || '#7A0000')}; color:${settings.optionStyle === 'clean' ? (settings.optionTextColor || settings.hindiColor || '#FBBF24') : (settings.optionBadgeColor || '#FFFFFF')};">
             ${settings.optionStyle === 'clean' ? `(${(opt.key || String.fromCharCode(65 + oIdx)).toLowerCase()})` : (opt.key || String.fromCharCode(65 + oIdx))}
           </div>
-          <div class="slide-opt-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="option" data-ppt-canvas-opt-idx="${oIdx}" title="Click to edit Option ${opt.key || String.fromCharCode(65 + oIdx)} on slide" style="color:${settings.optionTextColor || (settings.optionStyle === 'clean' && settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
+          <div class="slide-opt-text" contenteditable="true" spellcheck="false" data-ppt-canvas-field="option" data-ppt-canvas-opt-idx="${oIdx}" title="Click to edit Option ${opt.key || String.fromCharCode(65 + oIdx)} on slide" style="color:${settings.optionTextColor || (settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
             ${opt.textHtml || escapeHtml(opt.text || '')}
           </div>
         </div>
@@ -231,7 +232,9 @@ export function renderSlideCanvas(state) {
   const resolvedFooterBg = (settings.footerBg === "transparent" || (isCustomBg && (settings.footerBg === "transparent" || settings.isCustomTemplateMode || !settings.footerBg || settings.footerBg === "#7A0000")))
     ? "transparent"
     : (settings.footerBg || "#7A0000");
-  const bodyTopPad = (!settings.showHeader && isCustomBg) ? Math.max(settings.questionPadding || 16, Number(settings.headerHeight) || 64) : (settings.questionPadding || 16);
+  const bodyTopPad = settings.questionPadding !== undefined
+    ? Number(settings.questionPadding)
+    : ((!settings.showHeader && isCustomBg) ? Math.max(16, Number(settings.headerHeight) || 64) : 16);
 
   const isPlainQ = (settings.qBadgeStyle === "text" || settings.qBadgeStyle === "none" || settings.qBadgeStyle === "clean");
   const qBg = isPlainQ ? "transparent" : (settings.qBadgeBg || "#FFFFFF");
@@ -685,15 +688,16 @@ export function renderSlideCleanExportHtml(activeQ, activeIdx, globalSettings) {
                 <div class="slide-freeform-box slide-options-container" data-layout="${settings.optionsLayout || '2-col'}" data-option-style="${settings.optionStyle || 'card'}" style="display:grid; width:${settings.optionWidthPercent || 96}%; gap:${settings.optionGap || 10}px; transform:translate(${settings.optionsPosX || 0}px, ${settings.optionsPosY || 0}px);">
                   ${(activeQ.options || [{key:'A'},{key:'B'},{key:'C'},{key:'D'}]).slice(0, 4).map((opt, oIdx) => `
                     <div class="slide-option-box" style="
-                      background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionCardBg || '#FFFFFF')};
-                      border:${settings.optionStyle === 'clean' ? 'none' : `${settings.optionCardBorderWidth || 1.5}px solid ${settings.optionBorderColor || '#CBD5E1'}`};
+                      background:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'transparent' : (settings.optionCardBg || '#FFFFFF')};
+                      border:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'none' : `${settings.optionCardBorderWidth || 1.5}px solid ${settings.optionBorderColor || '#CBD5E1'}`};
+                      box-shadow:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'none' : '0 2px 4px rgba(0,0,0,0.05)'};
                       border-radius:${settings.optionCardRadius || 8}px;
                       padding:${settings.optionCardPadding || 8}px 14px;
                     ">
                       <div class="slide-opt-circle" style="background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionBadgeBg || '#7A0000')}; color:${settings.optionStyle === 'clean' ? (settings.optionTextColor || settings.hindiColor || '#FBBF24') : (settings.optionBadgeColor || '#FFFFFF')};">
                         ${settings.optionStyle === 'clean' ? `(${(opt.key || String.fromCharCode(65 + oIdx)).toLowerCase()})` : (opt.key || String.fromCharCode(65 + oIdx))}
                       </div>
-                      <div class="slide-opt-text" style="color:${settings.optionTextColor || (settings.optionStyle === 'clean' && settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
+                      <div class="slide-opt-text" style="color:${settings.optionTextColor || (settings.theme === 'dark' ? '#FFFFFF' : '#111111')}; font-size:${settings.optionFontSize || 18}px; font-family:${settings.optionFontFamily || settings.engFontFamily || 'Segoe UI, Arial, sans-serif'}; text-align:${settings.optionAlign || 'left'};">
                         ${opt.textHtml || escapeHtml(opt.text || '')}
                       </div>
                     </div>

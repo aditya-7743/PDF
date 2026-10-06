@@ -153,16 +153,16 @@ export function renderThumbnailSlideHtml(q, settings, idx) {
         <div class="slide-options-container" data-layout="${settings.optionsLayout || '2-col'}" data-option-style="${settings.optionStyle || 'card'}" style="display:${settings.showOptions && q.options && q.options.length > 0 ? 'grid' : 'none'}; width:${settings.optionWidthPercent || 96}%; gap:${settings.optionGap || 10}px; transform:translate(${settings.optionsPosX || 0}px, ${settings.optionsPosY || 0}px); margin-top:auto;">
           ${(q.options || []).map((opt) => `
             <div class="slide-option-item" style="
-              background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionCardBg || '#f8fafc')};
-              border:${settings.optionStyle === 'clean' ? 'none' : `1.5px solid ${settings.optionCardBorder || '#e2e8f0'}`};
+              background:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'transparent' : (settings.optionCardBg || '#f8fafc')};
+              border:${(settings.optionStyle === 'clean' || settings.optionStyle === 'badge-only') ? 'none' : `1.5px solid ${settings.optionCardBorder || '#e2e8f0'}`};
               border-radius:${settings.optionRadius || 8}px;
               padding:${settings.optionPadding || 8}px 12px;
               display:flex;
               align-items:center;
               gap:10px;
             ">
-              <span class="slide-option-badge" style="background:${settings.optionBadgeBg || '#7A0000'}; color:${settings.optionBadgeColor || '#FFFFFF'}; font-size:${settings.optionBadgeSize || 15}px; width:${(settings.optionBadgeSize || 15) + 12}px; height:${(settings.optionBadgeSize || 15) + 12}px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; flex-shrink:0;">
-                ${opt.key}
+              <span class="slide-option-badge" style="background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionBadgeBg || '#7A0000')}; color:${settings.optionStyle === 'clean' ? (settings.optionTextColor || '#FBBF24') : (settings.optionBadgeColor || '#FFFFFF')}; font-size:${settings.optionBadgeSize || 15}px; width:${(settings.optionBadgeSize || 15) + 12}px; height:${(settings.optionBadgeSize || 15) + 12}px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; flex-shrink:0;">
+                ${settings.optionStyle === 'clean' ? `(${opt.key.toLowerCase()})` : opt.key}
               </span>
               <span class="slide-option-text" style="color:${settings.optionTextColor || '#1e293b'}; font-size:${settings.optionFontSize || 17}px; font-weight:700;">
                 ${escapeHtml(opt.text || '')}

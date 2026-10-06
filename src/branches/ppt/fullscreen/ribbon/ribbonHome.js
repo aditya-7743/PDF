@@ -196,11 +196,14 @@ export function renderRibbonHome(state, settings, activeQ, activeIdx, totalSlide
 
           <!-- Option Style Row -->
           <div style="display:flex; align-items:center; gap:4px;">
-            <button type="button" class="ppt-fs-ribbon-btn-sm ${optionStyle === 'clean' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="clean" title="Clean (a)(b)(c)(d) Text">
-              (a) Clean
+            <button type="button" class="ppt-fs-ribbon-btn-sm ${optionStyle === 'badge-only' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="badge-only" title="Badge Only (Circular Badge without Card Boundary / Border)">
+              🔘 Badge Only
             </button>
             <button type="button" class="ppt-fs-ribbon-btn-sm ${optionStyle === 'card' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="card" title="Card Boxes [A][B][C][D]">
               [A] Cards
+            </button>
+            <button type="button" class="ppt-fs-ribbon-btn-sm ${optionStyle === 'clean' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="clean" title="Clean (a)(b)(c)(d) Text">
+              (a) Clean
             </button>
           </div>
         </div>

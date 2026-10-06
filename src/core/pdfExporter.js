@@ -263,7 +263,11 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
   const marginX = Math.round(((960 * (posXPercent / 100)) + 24) * scale);
   const maxContentW = Math.round(((960 * (widthPercent / 100)) - 48) * scale);
   const boxPosY = Math.round((settings.boxPosY || 0) * scale);
-  let flowY = headerH + Math.round((settings.questionPadding || 16) * scale) + boxPosY;
+  const isCustomBg = Boolean(q.bgImage || settings.bgImage);
+  const bodyTopPad = settings.questionPadding !== undefined
+    ? Number(settings.questionPadding)
+    : ((!showHeader && isCustomBg) ? Math.max(16, Number(settings.headerHeight) || 64) : 16);
+  let flowY = headerH + Math.round(bodyTopPad * scale) + boxPosY;
 
   const textAlign = settings.textAlign || "left";
   const engFontFamily = settings.engFontFamily || "Segoe UI, Arial, sans-serif";
@@ -479,7 +483,7 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
       const cX = startCardX + col * (cardW + cardGapX);
       const cY = optStartY + row * (cardH + cardGapY);
 
-      if (settings.optionStyle !== "clean") {
+      if (settings.optionStyle !== "clean" && settings.optionStyle !== "badge-only") {
         // Card Box
         ctx.fillStyle = settings.optionCardBg || "#FFFFFF";
         roundRect(ctx, cX, cY, cardW, cardH, (settings.optionCardRadius || 8) * scale);
@@ -488,10 +492,12 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
         ctx.strokeStyle = settings.optionBorderColor || "#CBD5E1";
         ctx.lineWidth = (settings.optionCardBorderWidth || 1.5) * scale;
         ctx.stroke();
+      }
 
+      if (settings.optionStyle !== "clean") {
         // Option Circle Badge
         const badgeD = Math.min(28 * scale, cardH * 0.72);
-        const bX = cX + 12 * scale;
+        const bX = (settings.optionStyle === "badge-only" ? cX + 4 * scale : cX + 12 * scale);
         const bY = cY + (cardH - badgeD) / 2;
 
         ctx.fillStyle = settings.optionBadgeBg || "#7A0000";
@@ -506,7 +512,7 @@ async function renderSlideToCanvasFallback(ctx, q, index, rawSettings, W, H) {
         ctx.fillText(opt.key || String.fromCharCode(65 + optIdx), bX + badgeD / 2, bY + badgeD / 2 + 1 * scale);
 
         // Option Text
-        ctx.fillStyle = settings.optionTextColor || (settings.optionStyle === "clean" && settings.theme === "dark" ? "#FFFFFF" : "#111111");
+        ctx.fillStyle = settings.optionTextColor || (settings.theme === "dark" ? "#FFFFFF" : "#111111");
         ctx.font = `bold ${optFontSize}px ${optFontFamily}`;
         ctx.textAlign = optAlign;
         ctx.textBaseline = "middle";

@@ -111,6 +111,7 @@ export function renderRibbonHome2(state, settings, activeQ, activeIdx, totalSlid
       <div class="ppt-fs-ribbon-group">
         <div class="ppt-fs-ribbon-group-content" style="display:flex; flex-direction:column; gap:3px;">
           <div style="display:flex; gap:2px;">
+            <button class="ppt-fs-ribbon-btn-sm ${settings.optionStyle === 'badge-only' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="badge-only">🔘 Badge Only</button>
             <button class="ppt-fs-ribbon-btn-sm ${(settings.optionStyle || 'card') === 'card' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="card">🔲 Card Boxes</button>
             <button class="ppt-fs-ribbon-btn-sm ${settings.optionStyle === 'clean' ? 'is-active' : ''}" data-action="ppt-set-option-style" data-style="clean">📝 Clean (a)(b)</button>
           </div>

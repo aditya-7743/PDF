@@ -108,11 +108,14 @@ export function renderPptImportWizardModal(state) {
             <div>
               <div class="ppt-wizard-section-title">2. Option Cards Style</div>
               <div class="ppt-layout-btn-group">
-                <button class="ppt-layout-btn ${(settings.optionStyle || 'clean') === 'clean' ? 'is-active' : ''}" data-action="ppt-wizard-set-option-style" data-style="clean">
-                  📝 Clean Minimalist (a) (b) (Digital Board)
+                <button class="ppt-layout-btn ${settings.optionStyle === 'badge-only' ? 'is-active' : ''}" data-action="ppt-wizard-set-option-style" data-style="badge-only">
+                  🔘 Badge Only (No Box) [A] [B]
                 </button>
                 <button class="ppt-layout-btn ${settings.optionStyle === 'card' ? 'is-active' : ''}" data-action="ppt-wizard-set-option-style" data-style="card">
                   🔲 Highlighted Card Boxes [A] [B]
+                </button>
+                <button class="ppt-layout-btn ${(settings.optionStyle || 'clean') === 'clean' ? 'is-active' : ''}" data-action="ppt-wizard-set-option-style" data-style="clean">
+                  📝 Clean Minimalist (a) (b) (Digital Board)
                 </button>
               </div>
             </div>
@@ -174,8 +177,8 @@ export function renderPptImportWizardModal(state) {
                       border:${settings.optionStyle === 'card' ? `1px solid ${settings.optionBorderColor || '#374151'}` : 'none'};
                       border-radius:4px; padding:3px 6px; display:flex; align-items:center; gap:4px;
                     ">
-                      <span style="font-size:10px; font-weight:800; color:${settings.optionStyle === 'card' ? (settings.optionBadgeColor || '#FFFFFF') : (settings.optionTextColor || '#FBBF24')};">
-                        ${settings.optionStyle === 'card' ? opt.key : `(${opt.key.toLowerCase()})`}
+                      <span style="font-size:10px; font-weight:800; color:${settings.optionStyle === 'clean' ? (settings.optionTextColor || '#FBBF24') : (settings.optionBadgeColor || '#FFFFFF')}; background:${settings.optionStyle === 'clean' ? 'transparent' : (settings.optionBadgeBg || '#7A0000')}; border-radius:${settings.optionStyle === 'clean' ? '0' : '50%'}; padding:${settings.optionStyle === 'clean' ? '0' : '1px 5px'};">
+                        ${settings.optionStyle === 'clean' ? `(${opt.key.toLowerCase()})` : opt.key}
                       </span>
                       <span style="font-size:10px; font-weight:700; color:${settings.optionTextColor || '#FFFFFF'};">${opt.text}</span>
                     </div>

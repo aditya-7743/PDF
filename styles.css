@@ -5219,6 +5219,15 @@ body.is-resizing-columns {
   font-weight: 800 !important;
 }
 
+/* Badge Only Options Style (No Outer Card Box / Border, retains filled circular badge) */
+.slide-options-container[data-option-style="badge-only"] .slide-option-box {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 3px 8px !important;
+  gap: 10px !important;
+}
+
 .slide-footer-bar {
   width: 100%;
   display: flex;

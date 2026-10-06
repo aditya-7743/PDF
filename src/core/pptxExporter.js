@@ -198,7 +198,11 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
     const contentX = (SLIDE_W * (posXPercent / 100)) + (24 / 72);
     const contentW = Math.max(3.5, (SLIDE_W * (widthPercent / 100)) - (48 / 72));
     const boxPosYIn = ((settings.boxPosY || 0) / 72);
-    let flowY = headerH + (((settings.questionPadding || 16) / 72) + boxPosYIn);
+    const isCustomBg = Boolean(q.bgImage || settings.bgImage);
+    const bodyTopPad = settings.questionPadding !== undefined
+      ? Number(settings.questionPadding)
+      : ((!showHeader && isCustomBg) ? Math.max(16, Number(settings.headerHeight) || 64) : 16);
+    let flowY = headerH + ((bodyTopPad / 72) + boxPosYIn);
 
     const textAlign = settings.textAlign || "left";
     const engFontFace = cleanFontFace(settings.engFontFamily, "Segoe UI");
@@ -448,7 +452,7 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
         const cX = startX + col * (cardW + cardGapX);
         const cY = optStartY + row * (cardH + cardGapY);
 
-        if (settings.optionStyle !== "clean") {
+        if (settings.optionStyle !== "clean" && settings.optionStyle !== "badge-only") {
           // Card Background Box
           slide.addShape(pptx.shapes.ROUNDED_RECTANGLE, {
             x: cX,
@@ -462,11 +466,13 @@ export async function exportQuestionsToPptx(questions, rawSettings, options = {}
               width: settings.optionCardBorderWidth || 1.5
             }
           });
+        }
 
+        if (settings.optionStyle !== "clean") {
           // Option Letter Badge (Circle / Pill)
           const optBadgeSize = Math.min(0.46, cardH * 0.68);
           const optBadgeY = cY + (cardH - optBadgeSize) / 2;
-          const optBadgeX = cX + 0.12;
+          const optBadgeX = (settings.optionStyle === "badge-only" ? cX + 0.04 : cX + 0.12);
 
           slide.addShape(pptx.shapes.OVAL, {
             x: optBadgeX,
